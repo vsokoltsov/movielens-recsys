@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+data/interim/*
+__pycache__
+.mypy_cache
+.pytest_cache
+.coverage
+.DS_Store
+.ruff_cache
+.env
