@@ -3,7 +3,7 @@ from recsys.config import MOVIELENS_PATH
 from recsys.modeling.training.als import train_als
 from recsys.modeling.training.item_knn import train_item_knn
 from recsys.modeling.training.utils import temporal_split_per_user
-from recsys.dataset import Dataset
+from recsys.modeling.dataset import Dataset
 
 @click.command()
 @click.option('--model-type', default='als', help='Type of model. Available values are "als", "item_knn", "pytorch"')
