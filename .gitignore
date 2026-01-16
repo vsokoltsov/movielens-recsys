@@ -9,6 +9,7 @@ wheels/
 # Virtual environments
 .venv
 data/interim/*
+data/models/*
 __pycache__
 .mypy_cache
 .pytest_cache
