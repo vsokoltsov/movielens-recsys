@@ -1,0 +1,18 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recsys-api
+    ports:
+      - "8000:8000"
+    environment:
+      MOVIELENS_PATH: "./data/raw/ml-1m"
+      MODELS: "./data/models"
+
+      MODEL_TYPE: "als"
+      MODEL_NAME: "alternating_least_squares.npz"
+      SOURCE: "csv"
+      RATING_THRESHOLD: "4"
+    command: ["uv", "run", "python", "-m", "uvicorn", "recsys.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
