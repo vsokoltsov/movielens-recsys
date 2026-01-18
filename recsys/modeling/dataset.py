@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from dataclasses import dataclass
 
+
 @dataclass
 class Dataset:
     dataset_path: str
@@ -13,7 +14,7 @@ class Dataset:
             sep="::",
             engine="python",
             names=["user_id", "gender", "age", "occupation", "zip"],
-            encoding="latin-1"
+            encoding="latin-1",
         )
 
     @property
@@ -22,7 +23,7 @@ class Dataset:
             os.path.join(self.dataset_path, "ratings.dat"),
             sep="::",
             engine="python",
-            names=["user_id", "movie_id", "rating", "timestamp"]
+            names=["user_id", "movie_id", "rating", "timestamp"],
         )
 
     @property
@@ -32,5 +33,5 @@ class Dataset:
             sep="::",
             engine="python",
             names=["movie_id", "title", "genres"],
-            encoding="latin-1"
+            encoding="latin-1",
         )
