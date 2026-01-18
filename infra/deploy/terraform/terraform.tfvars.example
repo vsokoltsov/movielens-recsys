@@ -1,0 +1,5 @@
+project_id = "<PROJECT_ID>"
+region     = "europe-west3"
+zone       = "europe-west3-a"
+image      = "europe-west3-docker.pkg.dev/<PROJECT_ID>/recsys/recsys-api:latest"
+apply_k8s  = false
