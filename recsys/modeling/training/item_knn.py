@@ -5,6 +5,7 @@ import json
 from scipy.sparse import csr_matrix, diags
 from recsys.config import MODELS
 
+
 def _save_csr(path_prefix: str, M: csr_matrix):
     np.savez_compressed(
         path_prefix,
@@ -14,9 +15,14 @@ def _save_csr(path_prefix: str, M: csr_matrix):
         shape=np.array(M.shape),
     )
 
+
 def _load_csr(path_prefix: str) -> csr_matrix:
     loader = np.load(path_prefix + ".npz", allow_pickle=False)
-    return csr_matrix((loader["data"], loader["indices"], loader["indptr"]), shape=tuple(loader["shape"]))
+    return csr_matrix(
+        (loader["data"], loader["indices"], loader["indptr"]),
+        shape=tuple(loader["shape"]),
+    )
+
 
 class ItemKNNRecommender:
     def __init__(self, k_neighbors=200, threshold=4):
@@ -26,8 +32,8 @@ class ItemKNNRecommender:
         self.user2idx = None
         self.item2idx = None
         self.idx2item = None
-        self.X_ui = None          # user-item
-        self.S_ii = None          # item-item similarity (sparse)
+        self.X_ui = None  # user-item
+        self.S_ii = None  # item-item similarity (sparse)
 
     def fit(self, ratings_df: pd.DataFrame):
         df = ratings_df.copy()
@@ -52,8 +58,8 @@ class ItemKNNRecommender:
         self._build_similarity()
 
     def _build_similarity(self):
-        X_iu = self.X_ui.T.tocsr()              # (n_items, n_users)
-        S = (X_iu @ X_iu.T).tocsr()             # co-occurrence
+        X_iu = self.X_ui.T.tocsr()  # (n_items, n_users)
+        S = (X_iu @ X_iu.T).tocsr()  # co-occurrence
 
         # cosine normalize
         item_norm = np.sqrt(S.diagonal())
@@ -102,6 +108,7 @@ class ItemKNNRecommender:
 
     def save(self, dir_path: str):
         import os
+
         os.makedirs(dir_path, exist_ok=True)
 
         # sparse matrices
@@ -121,7 +128,6 @@ class ItemKNNRecommender:
 
     @classmethod
     def load(cls, dir_path: str) -> "ItemKNNRecommender":
-        import os
         with open(f"{dir_path}/meta.json", "r", encoding="utf-8") as f:
             meta = json.load(f)
 
