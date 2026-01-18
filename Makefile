@@ -2,16 +2,16 @@ install-kernel:
 	uv run python -m ipykernel install --user --name=movielens-recsys --display-name="Recommendation system (MovieLens)"
 
 mypy:
-	uv run mypy pipelines/ tests/
+	uv run mypy recsys/
 
 black:
-	uv run black --check pipelines/ tests/
+	uv run black --check recsys/
 
 black-fix:
-	uv run black pipelines/ tests/
+	uv run black recsys/
 
 ruff:
-	uv run ruff check pipelines/ tests/ --fix
+	uv run ruff check recsys/ --fix
 
 lint:
 	make mypy & make black-fix & make ruff
