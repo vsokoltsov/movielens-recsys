@@ -22,3 +22,5 @@ gcp-service-account.json
 .terraform.lock.hcl
 terraform.tfvars
 .terraform.tfstate.lock.info
+terraform.tfstate
+terraform.tfstate.backup
