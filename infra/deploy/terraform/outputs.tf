@@ -13,3 +13,10 @@ output "service_external_ip" {
 output "service_external_hostname" {
   value = try(data.kubernetes_service_v1.svc[0].status[0].load_balancer[0].ingress[0].hostname, null)
 }
+
+output "raw_bucket"    { 
+  value = google_storage_bucket.raw.name 
+}
+output "models_bucket" { 
+  value = google_storage_bucket.models.name 
+  }

@@ -11,3 +11,6 @@ data:
   MODEL_NAME: "alternating_least_squares.npz"
   SOURCE: "csv"
   RATING_THRESHOLD: "4"
+  PROJECT_ID: "movielens-recsys-484717"
+  MODEL_BUCKET: "${PROJECT_ID}-recsys-models"
+  RAW_BUCKET: "${PROJECT_ID}-recsys-raw"

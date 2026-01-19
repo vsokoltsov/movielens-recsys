@@ -89,6 +89,9 @@ locals {
       MODEL_NAME        = var.model_name
       SOURCE            = var.data_source
       RATING_THRESHOLD  = tostring(var.rating_threshold)
+      PROJECT_ID        = var.project_id
+      MODEL_BUCKET      = var.models_bucket_name
+      RAW_BUCKET        = var.raw_bucket_name
     }
   }
 }

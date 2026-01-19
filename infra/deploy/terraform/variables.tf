@@ -52,3 +52,13 @@ variable "rating_threshold" {
   type    = number
   default = 4
 }
+
+variable "raw_bucket_name" {
+  type    = string
+  default = ""
+}
+
+variable "models_bucket_name" {
+  type    = string
+  default = ""
+}
