@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Dict
+from typing import List, Dict, Optional
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass, field
@@ -26,8 +26,20 @@ class AlternatingLeastSquaresRecommender:
             path=os.path.join(MOVIELENS_PATH, "ratings.dat"),
             columns=["user_id", "movie_id", "rating", "timestamp"],
         )
+
+    def preload(self) -> None:
         self.model = self.model.load(self.model_path)
-        self._set_matrix()
+        self._set_matrix(df=None)
+
+    def fit(self, df: pd.DataFrame):
+        self._set_matrix(df=df)
+        item_users = self.X_ui
+
+        self.model = AlternatingLeastSquares(**self.best_params)
+        self.model.fit(item_users)
+
+    def save(self):
+        self.save(self.model_path)
 
     def recommend(self, user_id: int, n_records: int = 10) -> List[int]:
         user_id = int(user_id)
@@ -71,8 +83,9 @@ class AlternatingLeastSquaresRecommender:
 
         return recs
 
-    def _set_matrix(self):
-        df = self._ratings.copy()
+    def _set_matrix(self, df: Optional[pd.DataFrame]):
+        if df is None:
+            df = self._ratings.copy()
         df = df[df["rating"] >= self.threshold][["user_id", "movie_id"]]
 
         u_uniques = np.sort(df["user_id"].unique())
@@ -90,3 +103,13 @@ class AlternatingLeastSquaresRecommender:
             (np.ones(len(df), dtype=np.float32), (rows, cols)),
             shape=(len(u_uniques), len(i_uniques)),
         )
+
+    @property
+    def best_params(self) -> Dict[str, float]:
+        return {
+            "factors": 128,
+            "regularization": 0.005562375053545441,
+            "alpha": 5,
+            "iterations": 30,
+            "random_state": 42,
+        }
