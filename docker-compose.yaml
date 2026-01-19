@@ -6,13 +6,43 @@ services:
     container_name: recsys-api
     ports:
       - "8000:8000"
-    environment:
-      MOVIELENS_PATH: "./data/raw/ml-1m"
-      MODELS: "./data/models"
-
-      MODEL_TYPE: "als"
-      MODEL_NAME: "alternating_least_squares.npz"
-      SOURCE: "csv"
-      RATING_THRESHOLD: "4"
+    env_file:
+      - .env
     command: ["uv", "run", "python", "-m", "uvicorn", "recsys.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ml
+    container_name: ml-notebooks
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    environment:
+      - NB_UID=${NB_UID}
+      - NB_GID=${NB_GID}
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
+      - JUPYTER_ENABLE_LAB=yes
+      - PLOMBER_DISABLE_JUPYTER=1
+      - TZ=Europe/Berlin
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data:/app/data
+      - ./:/app
+    command:
+      - uv
+      - run
+      - jupyter
+      - lab
+      - --ip=0.0.0.0
+      - --port=8888
+      - --no-browser
+      - --ServerApp.root_dir=/app/notebooks
+      - --IdentityProvider.token=
+      - --PasswordIdentityProvider.hashed_password=
+      - --ServerApp.allow_remote_access=True
+      - --ServerApp.disable_check_xsrf=True
+      - --ServerApp.allow_origin=*
+      - --ServerApp.allow_root=True
     restart: unless-stopped
