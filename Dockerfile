@@ -19,9 +19,11 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock* ./
 RUN uv venv /opt/venv && uv sync --frozen
 
-COPY . .
-COPY data/models/ /app/data/models/
-COPY data/raw/ml-1m/ /app/data/raw/ml-1m/
+COPY recsys/ /app/recsys/
 EXPOSE 8000
 
 CMD ["uv", "run", "python", "-m", "uvicorn", "recsys.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+FROM base AS ml
+COPY notebooks/ /app/notebooks/
+EXPOSE 8888
