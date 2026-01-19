@@ -15,3 +15,15 @@ ruff:
 
 lint:
 	make mypy & make black-fix & make ruff
+
+api:
+	docker-compose up api
+
+jupyter:
+	docker-compose up jupyter
+
+train-cli:
+	uv run python -m recsys.modeling.train --model-type=$(model_type) --bucket-name=$(bucket_name)
+
+predict-cli:
+	uv run python -m recsys.modeling.predict $(user_id) --model-type=$(model_type) --bucket-name=$(bucket_name)
