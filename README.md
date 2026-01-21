@@ -306,6 +306,42 @@ Offline evaluation uses:
 
 Metrics are computed on held-out validation splits.
 
+## 💻 Tech stack
+
+### Web API
+
+![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-%3E%3D0.128.0-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Uvicorn](https://img.shields.io/badge/Uvicorn-%3E%3D0.40.0-111827?style=flat-square&logo=uvicorn&logoColor=white)
+![Pydantic](https://img.shields.io/badge/Pydantic-%3E%3D2.12.5-E92063?style=flat-square&logo=pydantic&logoColor=white)
+![Pydantic%20Settings](https://img.shields.io/badge/pydantic--settings-%3E%3D2.12.0-E92063?style=flat-square&logo=pydantic&logoColor=white)
+
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-%3E%3D2.0.45-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white)
+![Alembic](https://img.shields.io/badge/Alembic-%3E%3D1.18.1-0E7C86?style=flat-square&logo=alembic&logoColor=white)
+![psycopg](https://img.shields.io/badge/psycopg-%3E%3D3.3.2-336791?style=flat-square&logo=postgresql&logoColor=white)
+![Google%20Cloud%20Storage](https://img.shields.io/badge/Google%20Cloud%20Storage-%3E%3D3.8.0-4285F4?style=flat-square&logo=googlecloud&logoColor=white)
+![Click](https://img.shields.io/badge/Click-%3E%3D8.3.1-111827?style=flat-square&logo=python&logoColor=white)
+
+### Machine Learning
+
+![NumPy](https://img.shields.io/badge/NumPy-%3E%3D2.4.0-013243?style=flat-square&logo=numpy&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-%3E%3D2.2.0-150458?style=flat-square&logo=pandas&logoColor=white)
+![SciPy](https://img.shields.io/badge/SciPy-%3E%3D1.11.0-8CAAE6?style=flat-square&logo=scipy&logoColor=white)
+![scikit--learn](https://img.shields.io/badge/scikit--learn-%3E%3D1.8.0-F7931E?style=flat-square&logo=scikitlearn&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-%3E%3D2.9.1-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
+![Optuna](https://img.shields.io/badge/Optuna-%3E%3D4.6.0-0B5FFF?style=flat-square&logo=optuna&logoColor=white)
+![Implicit](https://img.shields.io/badge/implicit-%3E%3D0.7.2-111827?style=flat-square&logo=python&logoColor=white)
+![gcsfs](https://img.shields.io/badge/gcsfs-%3E%3D2026.1.0-4285F4?style=flat-square&logo=googlecloud&logoColor=white)
+
+### Infrastructure
+
+![Docker](https://img.shields.io/badge/Docker-28.5.2-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-1.7.3-844FBA?style=flat-square&logo=terraform&logoColor=white)
+![kubectl](https://img.shields.io/badge/kubectl-1.32.7-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)
+![Google%20Cloud%20Platform](https://img.shields.io/badge/Google%20Cloud%20Platform-GCP-4285F4?style=flat-square&logo=googlecloud&logoColor=white)
+
+
 ## 🗂️ Project structure
 
 ```
