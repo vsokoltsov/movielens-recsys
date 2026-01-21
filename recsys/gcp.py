@@ -85,3 +85,13 @@ class GCPModelStorage:
     async def load_json(self, path: str) -> dict:
         blob = self.bucket.blob(path)
         return json.loads(blob.download_as_text())
+
+    async def save_onnx(self, path: str, local_onnx_path: str) -> None:
+        blob = self.bucket.blob(path)
+        blob.upload_from_filename(local_onnx_path)
+
+    async def load_onnx(self, path: str) -> str:
+        with tempfile.NamedTemporaryFile(suffix=".onnx", delete=False) as tmp:
+            blob = self.bucket.blob(path)
+            blob.download_to_filename(tmp.name)
+            return tmp.name
