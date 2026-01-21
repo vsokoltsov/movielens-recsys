@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pandas as pd
 from typing import List, Any, cast, AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -9,11 +10,15 @@ from pydantic import BaseModel
 
 from recsys.aggregates import ModelType, Movie
 from recsys.utils import read_from_csv, read_from_bytes
-from recsys.config import MOVIELENS_PATH, MODELS
-from recsys.api.config import get_settings
+from recsys.config import MOVIELENS_PATH, MODELS, DATABASE_URL
+from recsys.api.config import get_settings, Source
 from recsys.recommender import Recommender
-from recsys.gcp import GCPStorageClient
+from recsys.gcp import GCPStorageClient, GCPModelStorage
+from recsys.db.repositories.ratings import RatingsRepository
+from recsys.db.repositories.movies import MoviesRepository
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
 
 
 class RecsResponse(BaseModel):
@@ -24,22 +29,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Any, None]:
     load_dotenv()
 
     settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+    app.state.engine = engine
+    app.state.sessionmaker = SessionLocal
+
     model_path = os.path.join(MODELS, settings.MODEL_NAME)
     gcs_client = GCPStorageClient()
     model_bucket = os.environ.get('MODEL_BUCKET')
-    raw_bucket = os.environ.get('RAW_BUCKET')
-    movies_path = os.path.join(MOVIELENS_PATH, "movies.dat")
     
+    storage = None
+    movies_df = pd.DataFrame()
     if model_bucket:
-        model_dest_path = os.path.join("/tmp", settings.MODEL_NAME)
-        gcs_client.download(
-            bucket_name=str(model_bucket),
-            object_name=settings.MODEL_NAME,
-            dst_path=model_dest_path
-        )
-        model_path = model_dest_path
+        storage = GCPModelStorage(bucket_name=model_bucket)
+        app.state.storage = storage
 
-    if raw_bucket:
+    if settings.SOURCE == Source.CSV:
+        raw_bucket = os.environ.get('RAW_BUCKET')
+        if not raw_bucket:
+            raise ValueError("'RAW_BUCKET' variable is not set")
+
         users_df = read_from_bytes(
             bts=gcs_client.read_bytes(
                 bucket=raw_bucket, 
@@ -61,37 +70,38 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Any, None]:
             ),
             columns=["user_id", "movie_id", "rating", "timestamp"]
         )
-    else:
-        users_df = read_from_csv(
-            path=os.path.join(MOVIELENS_PATH, "users.dat"),
-            columns=["user_id", "gender", "age", "occupation", "zip"],
-        )
-        movies_df = read_from_csv(
-            path=movies_path,
-            columns=["movie_id", "title", "genres"],
-        )
-        ratings_df = read_from_csv(
-            path=os.path.join(MOVIELENS_PATH, "ratings.dat"),
-            columns=["user_id", "movie_id", "rating", "timestamp"],
-        )
-    
-    app.state.movies = movies_df
-    app.state.ratings = ratings_df
-    app.state.users = users_df
+        app.state.movies = movies_df
+        app.state.ratings = ratings_df
+        app.state.users = users_df
+
     app.state.recommender = Recommender(
+        storage=storage,
         model_type=settings.MODEL_TYPE,
         source=settings.SOURCE,
-        movies=app.state.movies,
+        movies=movies_df,
         rating_threshold=settings.RATING_THRESHOLD,
         model_path=model_path
     )
+    async with SessionLocal() as session:
+        ratings_repo = RatingsRepository(session=session)
+        await app.state.recommender.preload(ratings_repo=ratings_repo)
     yield
+    await engine.dispose()
 
 app = FastAPI(
     title="MovieLens Recommender API",
     version="1.0.0",
     lifespan=lifespan
 )
+
+def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
+    return cast(async_sessionmaker[AsyncSession], app.state.sessionmaker)
+
+async def get_db_session(
+    sessionmaker: async_sessionmaker[AsyncSession] = Depends(get_sessionmaker),
+) -> AsyncGenerator[AsyncSession, None]:
+    async with sessionmaker() as session:
+        yield session
 
 def get_recommender() -> Recommender:
     return cast(Recommender, app.state.recommender)
@@ -100,13 +110,21 @@ def get_recommender() -> Recommender:
     "/users/{id}/recommendations",
     response_model=RecsResponse,
 )
-def get_recommendations(
+async def get_recommendations(
     id: int = Path(..., ge=1),
     k: int = Query(10, ge=1, le=100),
-    recommender: Recommender = Depends(get_recommender)
+    session: AsyncSession = Depends(get_db_session),
+    recommender: Recommender = Depends(get_recommender),
 ):
     try:
-        movies: List[Movie] = recommender.recommend(user_id=id, n_items=k)
+        ratings_repo = RatingsRepository(session=session)
+        movies_repo = MoviesRepository(session=session)
+        movies = await recommender.recommend(
+            user_id=id,
+            n_items=k,
+            ratings_repo=ratings_repo,
+            movies_repo=movies_repo,
+        )
         return RecsResponse(movies=movies)
     except Exception as e:
         raise HTTPException(status_code=501, detail=e)
