@@ -211,13 +211,71 @@ The system relies on classical recommender system techniques:
 These approaches assume that users with similar historical behavior will have similar preferences in the future.
 
 ## 🧠 Project's diagram
-High-level flow:
-1. Raw data ingestion
-2. ETL & feature preparation
-3. Model training (offline)
-4. Model persistence (GCS)
-5. Online inference via API
-6. Deployment to GKE
+
+
+```mermaid
+flowchart TB
+    %% Sources
+    subgraph Data["Initial Data (Sources)"]
+        CSV["CSV files (MovieLens):<br/>users.dat / movies.dat / ratings.dat"]
+        PG["PostgreSQL (Cloud SQL / local):<br/>tables users / movies / ratings"]
+    end
+
+    %% Prepare
+    subgraph Prep["Data preparation"]
+        LOAD["Load data (repo / readers)"]
+        EDA["EDA:<br/>Exploratory Data Analysis"]
+        FEAT["Prepare interactions:<br/>apply rating threshold<br/>encode user_id/movie_id<br/>build X_ui (sparse)"]
+        SPLIT["Optional split:<br/>train / val / test (offline eval)"]
+    end
+
+    %% Train models
+    subgraph Train["Train models"]
+        subgraph CF["Collaborative Filtering"]
+            KNN["ItemKNN (item-item similarity)"]
+            ALS["AlternatingLeastSquares (implicit)"]
+        end
+        subgraph DL["Deep Learning"]
+            PT["PyTorch model (baseline/experiment)"]
+        end
+    end
+
+    %% Save artifacts
+    subgraph Artifacts["Artifacts"]
+        KNN_ART["ItemKNN artifacts:<br/>X_ui.npz / S_ii.npz / meta.json"]
+        ALS_ART["ALS artifacts:<br/>model.npz / X_ui.npz / mappings.json"]
+        PT_ART["PyTorch artifacts:<br/>checkpoint.pt / config.json"]
+        MIG["DB migrations (Alembic):<br/>schema for users/movies/ratings"]
+    end
+
+    %% Inference
+    subgraph Inference["Inference"]
+        CLI["CLI script"]
+        API["FastAPI web service:<br/>async preload + recommend endpoint"]
+    end
+
+    %% Flows: sources -> prep
+    CSV --> LOAD
+    PG  --> LOAD
+
+    LOAD --> EDA --> FEAT --> SPLIT
+
+    %% Prep -> train
+    SPLIT --> Train
+    
+
+    %% Train -> artifacts
+    KNN --> KNN_ART
+    ALS --> ALS_ART
+    PT  --> PT_ART
+
+    %% DB-specific artifact
+    PG --> MIG
+
+    %% Artifacts -> inference
+    Artifacts --> Inference
+    
+```
 
 ## 🔍 EDA
 Exploratory Data Analysis includes:
@@ -251,63 +309,90 @@ Metrics are computed on held-out validation splits.
 ## 🗂️ Project structure
 
 ```
-├── data
-│   └── interim
-│       ├── movies.parquet.gzip        <- Processed movie metadata
-│       ├── ratings.parquet.gzip       <- Cleaned user–item ratings
-│       └── users.parquet.gzip         <- User-level features
-├── docker-compose.yaml                <- Local multi-container setup
-├── Dockerfile                         <- Image definition for API service
-├── gcp-service-account.json           <- GCP service account credentials (local use)
-├── infra
-│   └── deploy
-│       ├── k8s
-│       │   ├── configmap.yaml         <- Runtime configuration for API
-│       │   ├── deployment.yaml        <- Kubernetes Deployment for API
-│       │   ├── namespace.yaml         <- Kubernetes namespace definition
-│       │   └── service.yaml           <- LoadBalancer service
-│       └── terraform
-│           ├── apis.tf                <- GCP APIs enablement
-│           ├── artifact_registry.tf   <- Docker Artifact Registry
-│           ├── gcs.tf                 <- GCS buckets for data and models
-│           ├── gke.tf                 <- GKE cluster and node pools
-│           ├── k8s.tf                 <- Kubernetes manifests via Terraform
-│           ├── locals.tf              <- Shared local variables
-│           ├── outputs.tf             <- Terraform outputs (IP, names)
-│           ├── providers.tf           <- Terraform providers configuration
-│           ├── terraform.tfstate      <- Terraform state (local)
-│           ├── terraform.tfstate.backup <- Terraform state backup
-│           ├── terraform.tfvars       <- Environment-specific variables
-│           ├── terraform.tfvars.example <- Example variables file
-│           ├── variables.tf           <- Input variable definitions
-│           └── versions.tf            <- Provider and Terraform versions
-├── Makefile                           <- Common automation commands
-├── mypy.ini                           <- Static typing configuration
-├── notebooks
-│   ├── 01_etl.ipynb                   <- Data ingestion & preprocessing
-│   ├── 02_eda.ipynb                   <- Exploratory data analysis
-│   ├── 03_pytorch.ipynb               <- Experimental modeling
-│   ├── 03_train.ipynb                 <- Model training workflow
-│   └── metrics.py                     <- Offline evaluation utilities
-├── pyproject.toml                     <- Python dependencies and tooling
-├── README.md                          <- Project documentation
-├── recsys
-│   ├── aggregates.py                  <- Feature aggregation logic
-│   ├── api
-│   │   ├── app.py                     <- FastAPI application entrypoint
-│   │   ├── config.py                  <- API settings (Pydantic)
-│   │   └── db.py                      <- Data access layer
-│   ├── config.py                      <- Global configuration
-│   ├── gcp.py                         <- Google Cloud Storage utilities
-│   ├── modeling
-│   │   ├── als.py                     <- ALS model wrapper
-│   │   ├── dataset.py                 <- Dataset abstractions
-│   │   ├── item_knn.py                <- Item-based kNN model
-│   │   ├── predict.py                 <- Inference logic
-│   │   ├── train.py                   <- Training entrypoint
-│   ├── recommender.py                 <- High-level recommender interface
-│   └── utils.py                       <- Shared utilities
-└── uv.lock                            <- Locked Python dependencies
+├── alembic.ini                                 <- Alembic configuration (migrations)
+├── cloudbuild.yaml                             <- Cloud Build pipeline definition
+├── data                                        <- Local data directory
+│   └── interim                                 <- Intermediate / processed datasets for development
+│       ├── movies.parquet.gzip                 <- Processed movie metadata
+│       ├── ratings.parquet.gzip                <- Cleaned user–item ratings
+│       └── users.parquet.gzip                  <- User-level features
+├── docker-compose.yaml                         <- Local multi-container setup (API/DB/tools)
+├── Dockerfile                                  <- Image definition for API (and optional ML targets)
+├── gcp-service-account.json                    <- GCP service account credentials (local use)
+├── infra                                       <- Infrastructure as code and deployment assets
+│   ├── deploy                                  <- Deployment manifests and Terraform config
+│   │   ├── k8s                                 <- Raw Kubernetes YAML manifests (reference / manual apply)
+│   │   │   ├── configmap.yaml                  <- Runtime configuration for API (env vars)
+│   │   │   ├── deployment.yaml                 <- Kubernetes Deployment for API
+│   │   │   ├── migrate-job.yaml                <- One-off Kubernetes Job for DB migrations (Alembic)
+│   │   │   ├── namespace.yaml                  <- Kubernetes namespace definition
+│   │   │   ├── secrets.yaml                    <- Kubernetes Secret definitions (DB creds, connection name)
+│   │   │   ├── service.yaml                    <- Kubernetes Service (LoadBalancer) for API
+│   │   │   └── serviceaccount.yaml             <- Kubernetes ServiceAccount (Workload Identity binding)
+│   │   └── terraform                           <- Terraform project for GCP + K8s resources
+│   │       ├── apis.tf                         <- GCP APIs enablement
+│   │       ├── artifact_registry.tf            <- Docker Artifact Registry
+│   │       ├── cloudsql.tf                     <- Cloud SQL instance, databases, users
+│   │       ├── gcs.tf                          <- GCS buckets for data and models
+│   │       ├── gke.tf                          <- GKE cluster and node pools
+│   │       ├── iam.tf                          <- IAM roles and bindings (Cloud SQL, GCS, etc.)
+│   │       ├── k8s.tf                          <- Kubernetes resources applied via Terraform
+│   │       ├── locals.tf                       <- Shared local variables and manifest maps
+│   │       ├── outputs.tf                      <- Terraform outputs (IPs, names, connection strings)
+│   │       ├── providers.tf                    <- Terraform providers configuration
+│   │       ├── secrets.tf                      <- Secrets management (K8s/GCP secrets wiring)
+│   │       ├── service_account.tf              <- GCP service accounts for Workload Identity
+│   │       ├── terraform.tfstate               <- Terraform state (local)
+│   │       ├── terraform.tfstate.backup        <- Terraform state backup
+│   │       ├── terraform.tfvars                <- Environment-specific variables
+│   │       ├── terraform.tfvars.example        <- Example variables file
+│   │       ├── variables.tf                    <- Input variable definitions
+│   │       └── versions.tf                     <- Provider and Terraform versions
+│   └── pgadmin                                 <- Local pgAdmin helper assets
+│       ├── init_pgadmin.sh                     <- pgAdmin initialization script
+│       ├── pgpass                              <- Postgres password file for tooling (local)
+│       └── servers.json                        <- pgAdmin server connections configuration
+├── Makefile                                    <- Common automation commands
+├── mypy.ini                                    <- Static typing configuration
+├── notebooks                                   <- Research / exploration notebooks
+│   ├── 01_etl.ipynb                            <- Data ingestion & preprocessing
+│   ├── 02_eda.ipynb                            <- Exploratory data analysis
+│   ├── 03_pytorch.ipynb                        <- Experimental modeling (PyTorch)
+│   ├── 03_train.ipynb                          <- Model training workflow
+│   └── metrics.py                              <- Offline evaluation utilities
+├── pyproject.toml                              <- Python dependencies and tooling
+├── README.md                                   <- Project documentation
+├── recsys                                      <- Application and ML code
+│   ├── aggregates.py                           <- Domain models / aggregates used across the app
+│   ├── alembic                                 <- Alembic migration package
+│   │   ├── env.py                              <- Alembic runtime configuration (online/offline migrations)
+│   │   ├── README                              <- Notes on migrations setup
+│   │   ├── script.py.mako                      <- Migration template
+│   │   └── versions                            <- Migration revisions
+│   │       ├── 987c10513f96_seed_movielens_ml_1m_data.py <- Seed migration for MovieLens data
+│   │       └── de48eeb5924c_create_users_movies_ratings.py <- Initial schema migration
+│   ├── api                                     <- FastAPI application layer
+│   │   ├── app.py                              <- FastAPI app entrypoint (lifespan, routes)
+│   │   └── config.py                           <- API settings (Pydantic)
+│   ├── config.py                               <- Global configuration helpers/constants
+│   ├── db                                      <- Database layer (SQLAlchemy)
+│   │   ├── models.py                           <- ORM models (users/movies/ratings)
+│   │   ├── repositories                        <- Query/repository layer
+│   │   │   ├── movies.py                       <- Movies repository (read/query helpers)
+│   │   │   └── ratings.py                      <- Ratings repository (read/query helpers)
+│   │   └── session.py                          <- DB engine/session factory (async)
+│   ├── gcp.py                                  <- Google Cloud Storage / GCP utilities
+│   ├── modeling                                <- Recommender models and training/inference code
+│   │   ├── als.py                              <- ALS model wrapper (implicit)
+│   │   ├── dataset.py                          <- Dataset / interaction building utilities
+│   │   ├── item_knn.py                         <- Item-based kNN model
+│   │   ├── predict.py                          <- Inference helpers / CLI prediction
+│   │   ├── protocols.py                        <- Shared model protocols/interfaces (typing)
+│   │   ├── torch.py                            <- PyTorch model baseline/experiments
+│   │   └── train.py                            <- Training entrypoint/workflow
+│   ├── recommender.py                          <- High-level recommender interface (model selection)
+│   └── utils.py                                <- Shared utilities (I/O, parsing, helpers)
+└── uv.lock                                     <- Locked Python dependencies
 ```
 
 ## 🔌 API Contract
