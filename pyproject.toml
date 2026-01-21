@@ -1,11 +1,10 @@
 [project]
 name = "movielens-recsys"
 version = "0.1.0"
-description = "Add your description here"
+description = "Recommender system for movielens-1m dataset"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  # только самое базовое ядро, без ноутбуков/тренировок
   "fastapi>=0.128.0",
   "uvicorn>=0.40.0",
   "pydantic>=2.12.5",
@@ -22,17 +21,13 @@ api = [
   "sqlalchemy>=2.0.45",
   "alembic>=1.18.1",
   "psycopg[binary]>=3.3.2",
-  # asyncpg НЕ обязателен, если ты используешь psycopg async (psycopg3)
-  # "asyncpg>=0.31.0",
   "google-cloud-storage>=3.8.0",
 ]
 
 train = [
-  # training / experiments
   "optuna>=4.6.0",
   "scikit-learn>=1.8.0",
   "torch>=2.9.1",
-  # если используешь gcsfs именно в обучении/etl
   "gcsfs>=2026.1.0",
 ]
 
