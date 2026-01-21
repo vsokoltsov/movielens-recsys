@@ -45,7 +45,7 @@ variable "model_name" {
 
 variable "data_source" {
   type    = string
-  default = "csv"
+  default = "db"
 }
 
 variable "rating_threshold" {
@@ -53,12 +53,28 @@ variable "rating_threshold" {
   default = 4
 }
 
-variable "raw_bucket_name" {
+variable "db_name" {
   type    = string
-  default = ""
+  default = "recsys"
 }
 
-variable "models_bucket_name" {
+variable "db_user" {
   type    = string
-  default = ""
+  default = "recsys_app"
+}
+
+variable "db_port" {
+  type    = number
+  default = 5432
+}
+
+variable "apply_migrations" {
+  type    = bool
+  default = false
+}
+
+variable "migrate_run_id" {
+  type        = string
+  description = "Unique suffix to force a new Job each run (e.g. unix timestamp)"
+  default     = ""
 }

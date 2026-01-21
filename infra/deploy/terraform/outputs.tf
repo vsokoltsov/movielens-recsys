@@ -19,4 +19,12 @@ output "raw_bucket"    {
 }
 output "models_bucket" { 
   value = google_storage_bucket.models.name 
-  }
+}
+output "cloudsql_connection_name" {
+  value = google_sql_database_instance.postgres.connection_name
+}
+output "db_user" { value = google_sql_user.app.name }
+output "db_password" {
+  value     = random_password.db_password.result
+  sensitive = true
+}

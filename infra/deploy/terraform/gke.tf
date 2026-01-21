@@ -15,6 +15,10 @@ resource "google_container_cluster" "gke" {
 
   network    = "default"
   subnetwork = "default"
+
+  workload_identity_config {
+    workload_pool = "${var.project_id}.svc.id.goog"
+  }
 }
 
 resource "google_container_node_pool" "primary" {

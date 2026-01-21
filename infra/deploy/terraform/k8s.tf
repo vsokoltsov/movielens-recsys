@@ -11,7 +11,9 @@ resource "kubernetes_manifest" "deployment" {
 
   depends_on = [
     kubernetes_manifest.namespace,
-    kubernetes_manifest.configmap
+    kubernetes_manifest.configmap,
+    kubernetes_manifest.ksa,
+    kubernetes_manifest.db_secret
   ]
 
   field_manager {
@@ -20,7 +22,8 @@ resource "kubernetes_manifest" "deployment" {
   }
 
    computed_fields = [
-    "spec.template.spec.containers[0].env"
+    "spec.template.spec.containers[0].env",
+    "spec.template.spec.serviceAccount"
   ]
 }
 
@@ -52,4 +55,43 @@ data "kubernetes_service_v1" "svc" {
   }
 
   depends_on = [kubernetes_manifest.service]
+}
+
+locals {
+  ksa_name = "recsys-api"
+}
+
+resource "kubernetes_manifest" "ksa" {
+  count = var.apply_k8s ? 1 : 0
+
+  manifest = {
+    apiVersion = "v1"
+    kind       = "ServiceAccount"
+    metadata = {
+      name      = local.ksa_name
+      namespace = var.k8s_namespace
+      annotations = {
+        "iam.gke.io/gcp-service-account" = google_service_account.recsys_cloudsql.email
+      }
+    }
+  }
+
+  depends_on = [kubernetes_manifest.namespace]
+}
+
+resource "kubernetes_manifest" "migrate_job" {
+  count = var.apply_k8s && var.apply_migrations ? 1 : 0
+
+  manifest = local.migrate_job_manifest
+
+  computed_fields = [
+    "spec.template.metadata.labels"
+  ]
+
+  depends_on = [
+    kubernetes_manifest.namespace,
+    kubernetes_manifest.configmap,
+    kubernetes_manifest.db_secret,
+    kubernetes_manifest.ksa,
+  ]
 }
