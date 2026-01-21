@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 
 from recsys.modeling.dataset import Dataset
 from recsys.modeling.item_knn import ItemKNNRecommender
-from recsys.config import MODELS, MOVIELENS_PATH
+from recsys.config import MOVIELENS_PATH, MODEL_BUCKET
+from recsys.aggregates import ModelType
 from recsys.modeling.als import AlternatingLeastSquaresRecommender
+from recsys.modeling.torch import PytorchRecommender
 from recsys.gcp import GCPModelStorage
 from recsys.db.session import AsyncSessionLocal
 from recsys.db.repositories.ratings import RatingsRepository
@@ -18,12 +20,14 @@ from recsys.db.repositories.ratings import RatingsRepository
 async def predict(user_id: int, model_type: str, bucket_name: Optional[str]):
     load_dotenv()
     
-    env_bucket = str(os.environ.get('MODEL_BUCKET', bucket_name))
+    env_bucket = bucket_name
+    if not env_bucket:
+        env_bucket = MODEL_BUCKET
     dataset = Dataset(dataset_path=MOVIELENS_PATH)
     async with AsyncSessionLocal() as session:
         ratings_repo = RatingsRepository(session)
         model_storage = GCPModelStorage(bucket_name=str(env_bucket))
-        if model_type == "als":
+        if model_type == ModelType.ALS:
             model = AlternatingLeastSquaresRecommender(
                 ratings_repo=ratings_repo,
                 storage=model_storage,
@@ -34,7 +38,7 @@ async def predict(user_id: int, model_type: str, bucket_name: Optional[str]):
             )
             await model.preload()
             recommendations = await model.recommend(user_id=user_id)
-        elif model_type == "item_knn":
+        elif model_type == ModelType.ITEM_KNN:
             model_ = ItemKNNRecommender(
                 ratings_repo=ratings_repo,
                 storage=model_storage,
@@ -44,6 +48,16 @@ async def predict(user_id: int, model_type: str, bucket_name: Optional[str]):
             )
             await model_.preload()
             recommendations = await model_.recommend(int(user_id))
+        elif model_type == ModelType.PYTORCH:
+            ptr =  PytorchRecommender(
+                storage=model_storage,
+                model_path="pytorch/latest/model.pt",
+                x_ui_path="pytorch/latest/x_ui.npz",
+                mappings_path="pytorch/latest/mappings.json",
+                ratings_repo=ratings_repo
+            )
+            await ptr.preload()
+            recommendations = await ptr.recommend(int(user_id))
 
         movies = dataset.movies.iloc[recommendations].to_dict(orient="records")
         click.echo(movies)
