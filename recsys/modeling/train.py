@@ -5,9 +5,11 @@ from typing import Optional
 import click
 from dotenv import load_dotenv
 
-from recsys.config import MOVIELENS_PATH, MODELS
+from recsys.config import MOVIELENS_PATH
+from recsys.aggregates import ModelType
 from recsys.modeling.als import AlternatingLeastSquaresRecommender
 from recsys.modeling.item_knn import ItemKNNRecommender
+from recsys.modeling.torch import PytorchRecommender
 from recsys.modeling.dataset import Dataset
 from recsys.gcp import GCPModelStorage
 from recsys.db.session import AsyncSessionLocal
@@ -21,7 +23,7 @@ async def train_model(model_type: str, bucket_name: Optional[str]):
     async with AsyncSessionLocal() as session:
         ratings_repo = RatingsRepository(session)
         model_storage = GCPModelStorage(bucket_name=str(env_bucket))
-        if model_type == "als":
+        if model_type == ModelType.ALS:
             click.echo("Train alternating least squares model...")
             als = AlternatingLeastSquaresRecommender(
                 ratings_repo=ratings_repo,
@@ -33,7 +35,7 @@ async def train_model(model_type: str, bucket_name: Optional[str]):
             )
             await als.fit(dataset.ratings)
             await als.save()
-        elif model_type == "item_knn":
+        elif model_type == ModelType.ITEM_KNN:
             click.echo("Train item knn model...")
             knn = ItemKNNRecommender(
                 ratings_repo=ratings_repo,
@@ -44,6 +46,18 @@ async def train_model(model_type: str, bucket_name: Optional[str]):
             )
             await knn.fit()
             await knn.save()
+        elif model_type == ModelType.PYTORCH:
+            click.echo("Train pytorch model...")
+            ptr = PytorchRecommender(
+                storage=model_storage,
+                model_path="pytorch/latest/model.pt",
+                x_ui_path="pytorch/latest/x_ui.npz",
+                mappings_path="pytorch/latest/mappings.json",
+                ratings_repo=ratings_repo
+            )
+            await ptr.fit(dataset.ratings)
+            await ptr.save()
+
 
 @click.command()
 @click.option(
