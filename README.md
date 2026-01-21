@@ -479,11 +479,7 @@ Service `/docs` could be found [here](http://34.159.178.13/docs)
 * After that it is required to build Docker image for GCP structure:
 
 ```bash
-gcloud builds submit \
-  --project <PROJECT_ID> \
-  --region europe-west3 \
-  --tag europe-west3-docker.pkg.dev/<PROJECT_ID>/recsys/recsys-api:latest \
-  .
+gcloud builds submit . --config cloudbuild.yaml
 ```
 
 Then, the deployment itself:
