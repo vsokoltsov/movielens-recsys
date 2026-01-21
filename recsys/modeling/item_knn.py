@@ -1,44 +1,58 @@
 import os
+from typing import Optional, Dict, List
 import pandas as pd
 import numpy as np
 import json
 from scipy.sparse import csr_matrix, diags
 from recsys.config import MODELS
+from recsys.gcp import GCPModelStorage
+from recsys.db.repositories.ratings import RatingsRepository
+from recsys.modeling.protocols import RecommenderModel
+
+class ItemKNNRecommender(RecommenderModel):
+    def __init__(self,
+        storage: GCPModelStorage,
+        ratings_repo: RatingsRepository,
+        artifact_prefix: str,
+        k_neighbors=200, 
+        threshold=4):
 
 
-def _save_csr(path_prefix: str, M: csr_matrix):
-    np.savez_compressed(
-        path_prefix,
-        data=M.data,
-        indices=M.indices,
-        indptr=M.indptr,
-        shape=np.array(M.shape),
-    )
-
-
-def _load_csr(path_prefix: str) -> csr_matrix:
-    loader = np.load(path_prefix + ".npz", allow_pickle=False)
-    return csr_matrix(
-        (loader["data"], loader["indices"], loader["indptr"]),
-        shape=tuple(loader["shape"]),
-    )
-
-
-class ItemKNNRecommender:
-    def __init__(self, k_neighbors=200, threshold=4):
+        self.storage = storage
+        self.ratings_repo = ratings_repo
+        self.artifact_prefix = artifact_prefix
         self.k_neighbors = k_neighbors
         self.threshold = threshold
 
-        self.user2idx = None
-        self.item2idx = None
-        self.idx2item = None
-        self.X_ui = None  # user-item
-        self.S_ii = None  # item-item similarity (sparse)
+        self.user2idx: Dict[int, int] = {}
+        self.item2idx: Dict[int, int] = {}
+        self.idx2item: Dict[int, int] = {}
+        self.X_ui: Optional[csr_matrix] = None  # user-item
+        self.S_ii: Optional[csr_matrix] = None  # item-item similarity (sparse)
 
-    def fit(self, ratings_df: pd.DataFrame):
-        df = ratings_df.copy()
-        df = df[df["rating"] >= self.threshold][["user_id", "movie_id"]]
+    async def preload(self) -> None:
+        meta = await self.storage.load_json(f"{self.artifact_prefix}/meta.json")
 
+        self.threshold = int(meta["threshold"])
+        self.k_neighbors = int(meta["k_neighbors"])
+        self.user2idx = {int(k): int(v) for k, v in meta["user2idx"].items()}
+        self.item2idx = {int(k): int(v) for k, v in meta["item2idx"].items()}
+        self.idx2item = {int(k): int(v) for k, v in meta["idx2item"].items()}
+
+        self.X_ui = await self.storage.load_csr_npz(f"{self.artifact_prefix}/X_ui.npz")
+        self.S_ii = await self.storage.load_csr_npz(f"{self.artifact_prefix}/S_ii.npz")
+
+    async def fit(self, limit: Optional[int] = None):
+        df = await self.ratings_repo.fetch_ratings_df(min_rating=self.threshold, limit=limit)
+        if df.empty:
+            self.user2idx = {}
+            self.item2idx = {}
+            self.idx2item = {}
+            self.X_ui = csr_matrix((0, 0), dtype=np.float32)
+            self.S_ii = csr_matrix((0, 0), dtype=np.float32)
+            await self.save()
+            return
+    
         # factorize
         u_codes, u_uniques = pd.factorize(df["user_id"], sort=True)
         i_codes, i_uniques = pd.factorize(df["movie_id"], sort=True)
@@ -56,6 +70,24 @@ class ItemKNNRecommender:
         )
 
         self._build_similarity()
+
+    async def save(self) -> None:
+        if self.X_ui is None or self.S_ii is None:
+            raise RuntimeError("Nothing to save: X_ui/S_ii not built.")
+
+        # матрицы
+        await self.storage.save_csr_npz(f"{self.artifact_prefix}/X_ui.npz", self.X_ui.tocsr())
+        await self.storage.save_csr_npz(f"{self.artifact_prefix}/S_ii.npz", self.S_ii.tocsr())
+
+        # мета + маппинги
+        meta = {
+            "k_neighbors": int(self.k_neighbors),
+            "threshold": int(self.threshold),
+            "user2idx": self.user2idx,
+            "item2idx": self.item2idx,
+            "idx2item": self.idx2item,
+        }
+        await self.storage.save_json(f"{self.artifact_prefix}/meta.json", meta)
 
     def _build_similarity(self):
         X_iu = self.X_ui.T.tocsr()  # (n_items, n_users)
@@ -87,57 +119,29 @@ class ItemKNNRecommender:
                 S.rows[i] = row_cols[idx].tolist()
         return S.tocsr()
 
-    def recommend(self, user_id: int, n_records: int = 10):
+    async def recommend(self, user_id: int, n_records: int = 10) -> List[int]:
+        if self.X_ui is None or self.S_ii is None:
+            raise RuntimeError("Model is not loaded. Call preload() or fit() first.")
+
+        user_id = int(user_id)
         if user_id not in self.user2idx:
             return []
 
         uidx = self.user2idx[user_id]
         user_row = self.X_ui.getrow(uidx)
         seen = set(user_row.indices)
-
         if not seen:
             return []
 
+        # (1, n_items) @ (n_items, n_items) -> (1, n_items)
         scores = (user_row @ self.S_ii).toarray().ravel()
+
         if seen:
             scores[list(seen)] = -np.inf
 
-        top = np.argpartition(-scores, n_records)[:n_records]
+        n_records = int(n_records)
+        n_records = min(n_records, scores.size)
+
+        top = np.argpartition(-scores, n_records - 1)[:n_records]
         top = top[np.argsort(-scores[top])]
         return [self.idx2item[int(i)] for i in top]
-
-    def save(self, dir_path: str):
-        import os
-
-        os.makedirs(dir_path, exist_ok=True)
-
-        # sparse matrices
-        _save_csr(f"{dir_path}/X_ui", self.X_ui.tocsr())
-        _save_csr(f"{dir_path}/S_ii", self.S_ii.tocsr())
-
-        # metadata / mappings
-        meta = {
-            "k_neighbors": self.k_neighbors,
-            "threshold": self.threshold,
-            "user2idx": self.user2idx,
-            "item2idx": self.item2idx,
-            "idx2item": self.idx2item,
-        }
-        with open(f"{dir_path}/meta.json", "w", encoding="utf-8") as f:
-            json.dump(meta, f)
-
-    @classmethod
-    def load(cls, dir_path: str) -> "ItemKNNRecommender":
-        with open(f"{dir_path}/meta.json", "r", encoding="utf-8") as f:
-            meta = json.load(f)
-
-        model = cls(k_neighbors=meta["k_neighbors"], threshold=meta["threshold"])
-        # json keys may become strings → convert back to int
-        model.user2idx = {int(k): int(v) for k, v in meta["user2idx"].items()}
-        model.item2idx = {int(k): int(v) for k, v in meta["item2idx"].items()}
-        model.idx2item = {int(k): int(v) for k, v in meta["idx2item"].items()}
-
-        model.X_ui = _load_csr(f"{dir_path}/X_ui")
-        model.S_ii = _load_csr(f"{dir_path}/S_ii")
-        return model
-
