@@ -9,11 +9,18 @@ from scipy.sparse import csr_matrix
 from recsys.aggregates import Movie
 from recsys.config import MOVIELENS_PATH
 from recsys.utils import read_from_csv
+from recsys.db.repositories.ratings import RatingsRepository
+from recsys.gcp import GCPModelStorage
+from recsys.modeling.protocols import RecommenderModel
 
 @dataclass
-class AlternatingLeastSquaresRecommender:
+class AlternatingLeastSquaresRecommender(RecommenderModel):
     threshold: int
     model_path: str
+    x_ui_path: str
+    mappings_path: str
+    ratings_repo: RatingsRepository
+    storage: GCPModelStorage
     model: AlternatingLeastSquares = field(default_factory=AlternatingLeastSquares)
     X_ui: csr_matrix = field(default_factory=dict, repr=False)
     user2idx: Dict[int, int] = field(default_factory=dict, repr=False)
@@ -21,27 +28,37 @@ class AlternatingLeastSquaresRecommender:
     item2idx: Dict[int, int] = field(default_factory=dict, repr=False)
     idx2item: Dict[int, int] = field(default_factory=dict, repr=False)
 
-    def __post_init__(self):
-        self._ratings = read_from_csv(
-            path=os.path.join(MOVIELENS_PATH, "ratings.dat"),
-            columns=["user_id", "movie_id", "rating", "timestamp"],
-        )
+    async def preload(self) -> None:
+        self.model = await self.storage.load_als_model(self.model_path)
+        self.X_ui = await self.storage.load_csr_npz(self.x_ui_path)
+        meta = await self.storage.load_json(self.mappings_path)
+        self.user2idx = {int(k): int(v) for k, v in meta["user2idx"].items()}
+        self.idx2item = {int(k): int(v) for k, v in meta["idx2item"].items()}
+        self.item2idx = {int(k): int(v) for k, v in meta["item2idx"].items()}
 
-    def preload(self) -> None:
-        self.model = self.model.load(self.model_path)
-        self._set_matrix(df=None)
-
-    def fit(self, df: pd.DataFrame):
+    async def fit(self, df: pd.DataFrame):
+        df = await self.ratings_repo.fetch_ratings_df(min_rating=self.threshold)
         self._set_matrix(df=df)
         item_users = self.X_ui
 
         self.model = AlternatingLeastSquares(**self.best_params)
         self.model.fit(item_users)
 
-    def save(self):
-        self.save(self.model_path)
+    async def save(self):
+        # self.model.save(self.model_path)
 
-    def recommend(self, user_id: int, n_records: int = 10) -> List[int]:
+        await self.storage.save_als_model(self.model_path, self.model)
+        await self.storage.save_csr_npz(self.x_ui_path, self.X_ui)
+        await self.storage.save_json(self.mappings_path, {
+            "user2idx": self.user2idx,
+            "idx2user": self.idx2user,
+            "item2idx": self.item2idx,
+            "idx2item": self.idx2item,
+            "threshold": self.threshold,
+            "params": self.best_params,
+        })
+
+    async def recommend(self, user_id: int, n_records: int = 10) -> List[int]:
         user_id = int(user_id)
 
         if self.user2idx is not None and user_id not in self.user2idx:
@@ -62,7 +79,10 @@ class AlternatingLeastSquaresRecommender:
 
         recs = []
         n_items = self.X_ui.shape[1]
-        seen_movie_ids = set(self._ratings.loc[self._ratings["user_id"] == user_id, "movie_id"])
+        seen_movie_ids = await self.ratings_repo.fetch_user_seen_movie_ids(
+            user_id=user_id,
+            min_rating=self.threshold
+        )
         seen_iidx = {self.item2idx[m] for m in seen_movie_ids if m in self.item2idx}
 
         for ii in item_idxs:
@@ -83,11 +103,7 @@ class AlternatingLeastSquaresRecommender:
 
         return recs
 
-    def _set_matrix(self, df: Optional[pd.DataFrame]):
-        if df is None:
-            df = self._ratings.copy()
-        df = df[df["rating"] >= self.threshold][["user_id", "movie_id"]]
-
+    def _set_matrix(self, df: pd.DataFrame) -> None:
         u_uniques = np.sort(df["user_id"].unique())
         i_uniques = np.sort(df["movie_id"].unique())
 
