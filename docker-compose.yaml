@@ -8,8 +8,54 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-service-account.json
+    volumes:
+      - ./gcp-service-account.json:/secrets/gcp-service-account.json:ro
+      - ./recsys:/app/recsys
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - ./data:/app/data
     command: ["uv", "run", "python", "-m", "uvicorn", "recsys.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_DB: recsys
+      POSTGRES_USER: recsys
+      POSTGRES_PASSWORD: recsys
+      TZ: Europe/Berlin
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recsys -d recsys"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    depends_on:
+      - postgres
+    ports:
+      - "127.0.0.1:5050:80"
+    environment:
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+
+      PGADMIN_DEFAULT_EMAIL: "admin@example.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+
+      PGADMIN_CONFIG_LOAD_SERVERS_FROM_JSON: "True"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./infra/pgadmin/pgpass:/pgpass:ro
 
   jupyter:
     build:
@@ -46,3 +92,7 @@ services:
       - --ServerApp.allow_origin=*
       - --ServerApp.allow_root=True
     restart: unless-stopped
+
+volumes:
+  pgdata:
+  pgadmin_data:
