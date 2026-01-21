@@ -608,6 +608,6 @@ Then, the deployment itself:
 1. Go in `infra/deploy/terraform`
 2. `terraform init`
 3. (rename `terraform.tfvars.example` => `terraform.tfvars`)
-4. `terraform plan -var="apply_k8s=false"` - for creating the infrastructure itself, without applying Kubernetes configs
-5. `terraform plan -var="apply_k8s=true"` - Apply Kubernetes configs
+4. `terraform plan -var="apply_k8s=false" -var="apply_migrations=false"` - for creating the infrastructure itself, without applying Kubernetes configs
+5. `terraform plan -var="apply_k8s=true" -var="apply_migrations=true"` - Apply Kubernetes configs (with migrations)
 6. `terraform output service_external_ip` - You should be able to see external API, which can be used to application's access
