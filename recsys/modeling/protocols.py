@@ -1,0 +1,6 @@
+from typing import List, Protocol, runtime_checkable
+
+@runtime_checkable
+class RecommenderModel(Protocol):
+    async def preload(self) -> None: ...
+    async def recommend(self, user_id: int, n_records: int = 10) -> List[int]: ...
