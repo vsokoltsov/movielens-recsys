@@ -12,8 +12,8 @@ from recsys.modeling.protocols import RecommenderModel
 class ItemKNNRecommender(RecommenderModel):
     def __init__(self,
         storage: GCPModelStorage,
-        ratings_repo: RatingsRepository,
         artifact_prefix: str,
+        ratings_repo: Optional[RatingsRepository] = None,
         k_neighbors=200, 
         threshold=4):
 
@@ -43,6 +43,9 @@ class ItemKNNRecommender(RecommenderModel):
         self.S_ii = await self.storage.load_csr_npz(f"{self.artifact_prefix}/S_ii.npz")
 
     async def fit(self, limit: Optional[int] = None):
+        if not self.ratings_repo:
+            raise ValueError("ratings repository is not defined")
+            
         df = await self.ratings_repo.fetch_ratings_df(min_rating=self.threshold, limit=limit)
         if df.empty:
             self.user2idx = {}
@@ -75,11 +78,9 @@ class ItemKNNRecommender(RecommenderModel):
         if self.X_ui is None or self.S_ii is None:
             raise RuntimeError("Nothing to save: X_ui/S_ii not built.")
 
-        # матрицы
         await self.storage.save_csr_npz(f"{self.artifact_prefix}/X_ui.npz", self.X_ui.tocsr())
         await self.storage.save_csr_npz(f"{self.artifact_prefix}/S_ii.npz", self.S_ii.tocsr())
 
-        # мета + маппинги
         meta = {
             "k_neighbors": int(self.k_neighbors),
             "threshold": int(self.threshold),

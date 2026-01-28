@@ -19,8 +19,8 @@ class AlternatingLeastSquaresRecommender(RecommenderModel):
     model_path: str
     x_ui_path: str
     mappings_path: str
-    ratings_repo: RatingsRepository
     storage: GCPModelStorage
+    ratings_repo: Optional[RatingsRepository] = None
     model: AlternatingLeastSquares = field(default_factory=AlternatingLeastSquares)
     X_ui: csr_matrix = field(default_factory=dict, repr=False)
     user2idx: Dict[int, int] = field(default_factory=dict, repr=False)
@@ -37,6 +37,8 @@ class AlternatingLeastSquaresRecommender(RecommenderModel):
         self.item2idx = {int(k): int(v) for k, v in meta["item2idx"].items()}
 
     async def fit(self, df: pd.DataFrame):
+        if not self.ratings_repo:
+            raise ValueError("ratings repository is not defined")
         df = await self.ratings_repo.fetch_ratings_df(min_rating=self.threshold)
         self._set_matrix(df=df)
         item_users = self.X_ui
@@ -77,31 +79,32 @@ class AlternatingLeastSquaresRecommender(RecommenderModel):
             recalculate_user=False,
         )
 
-        recs = []
-        n_items = self.X_ui.shape[1]
-        seen_movie_ids = await self.ratings_repo.fetch_user_seen_movie_ids(
-            user_id=user_id,
-            min_rating=self.threshold
-        )
-        seen_iidx = {self.item2idx[m] for m in seen_movie_ids if m in self.item2idx}
+        return item_idxs
+        # recs = []
+        # n_items = self.X_ui.shape[1]
+        # seen_movie_ids = await self.ratings_repo.fetch_user_seen_movie_ids(
+        #     user_id=user_id,
+        #     min_rating=self.threshold
+        # )
+        # seen_iidx = {self.item2idx[m] for m in seen_movie_ids if m in self.item2idx}
 
-        for ii in item_idxs:
-            ii = int(ii)
+        # for ii in item_idxs:
+        #     ii = int(ii)
 
-            if ii < 0 or ii >= n_items:
-                raise RuntimeError(
-                    f"ALS returned out-of-range item index {ii}, but n_items={n_items}. "
-                    "This means the model and X_ui are from different runs."
-                )
+        #     if ii < 0 or ii >= n_items:
+        #         raise RuntimeError(
+        #             f"ALS returned out-of-range item index {ii}, but n_items={n_items}. "
+        #             "This means the model and X_ui are from different runs."
+        #         )
 
-            if ii in seen_iidx:
-                continue
+        #     if ii in seen_iidx:
+        #         continue
 
-            recs.append(self.idx2item[ii])
-            if len(recs) == n_records:
-                break
+        #     recs.append(self.idx2item[ii])
+        #     if len(recs) == n_records:
+        #         break
 
-        return recs
+        # return recs
 
     def _set_matrix(self, df: pd.DataFrame) -> None:
         u_uniques = np.sort(df["user_id"].unique())
