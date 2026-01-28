@@ -12,27 +12,24 @@ from recsys.gcp import GCPModelStorage
 from recsys.db.repositories.ratings import RatingsRepository
 from recsys.db.repositories.movies import MoviesRepository
 from recsys.modeling.protocols import RecommenderModel
+from recsys.context import RequestContext
 
 @dataclass
 class Recommender:
     model_type: ModelType
     source: Source
-    movies: Optional[pd.DataFrame]
     rating_threshold: int
     model_path: str
+    movies: Optional[pd.DataFrame]
     storage: Optional[GCPModelStorage] = field(default=None, repr=False)
     model: Optional[RecommenderModel] = field(default=None, init=False, repr=False)
 
-    async def preload(self, ratings_repo: Optional[RatingsRepository] = None) -> None:
+    async def preload(self) -> None:
         if self.storage is None:
             raise ValueError("Storage is none")
-
-        if ratings_repo is None:
-            raise RuntimeError("ratings_repo is required in this design")
         
         if self.model_type == ModelType.ALS:
             self.model = AlternatingLeastSquaresRecommender(
-                ratings_repo=ratings_repo,
                 storage=self.storage,
                 threshold=self.rating_threshold,
                 model_path="als/latest/model.npz",
@@ -41,7 +38,6 @@ class Recommender:
             )
         elif self.model_type == ModelType.ITEM_KNN:
             self.model = ItemKNNRecommender(
-                ratings_repo=ratings_repo,
                 storage=self.storage,
                 artifact_prefix="item_knn/v1",
                 k_neighbors=200, 
@@ -53,7 +49,10 @@ class Recommender:
         await self.model.preload()
  
 
-    async def recommend(self, ratings_repo: RatingsRepository, movies_repo: MoviesRepository, user_id: int, n_items: int = 10) -> List[Movie]:
+    async def recommend(self, ctx: RequestContext, user_id: int, n_items: int = 10) -> List[Movie]:
+        ratings_repo: RatingsRepository = ctx.ratings
+        movies_repo: MoviesRepository = ctx.movies
+    
         if self.model is None:
             raise ValueError("model is not initialized")
 
