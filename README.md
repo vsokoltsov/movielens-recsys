@@ -472,6 +472,10 @@ In order to run the project, it is necessary to install
 * [uv](https://docs.astral.sh/uv/)
 * [Make](https://www.gnu.org/software/make/)
 
+Apart from that, you need to create `.env` file in the root folder of the project
+
+Copy keys from [.env.sample](.env.sample) and fill them with appropriate values
+
 ---
 
 ### 🛠️ Makefile
