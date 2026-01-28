@@ -8,12 +8,10 @@ from alembic import context
 from recsys.db.models import Base
 
 def _build_db_url() -> str:
-    # 1) если DATABASE_URL уже задан — используем его
     url = os.getenv("DATABASE_URL")
     if url:
         return url
 
-    # 2) иначе собираем из DB_*
     user = os.environ["DB_USER"]
     pwd  = os.environ["DB_PASSWORD"]
     host = os.getenv("DB_HOST", "127.0.0.1")
@@ -44,7 +42,6 @@ target_metadata = Base.metadata
 
 def get_url() -> str:
     url = os.environ["DATABASE_URL"]
-    # важно: alembic лучше кормить sync драйвером
     url = url.replace("postgresql+psycopg_async://", "postgresql+psycopg://")
     url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://")
     return url
