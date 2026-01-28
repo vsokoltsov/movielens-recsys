@@ -4,7 +4,7 @@ resource "google_sql_database_instance" "postgres" {
   region           = var.region
 
   settings {
-    tier = "db-custom-1-3840" # пример
+    tier = "db-custom-1-3840"
 
     ip_configuration {
       ipv4_enabled = true

@@ -8,4 +8,8 @@ resource "kubernetes_manifest" "db_secret" {
     name            = "terraform"
     force_conflicts = true
   }
+  computed_fields = [
+    "data",
+    "stringData",
+  ]
 }
