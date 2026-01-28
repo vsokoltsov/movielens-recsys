@@ -18,6 +18,8 @@ from recsys.db.repositories.ratings import RatingsRepository
 from recsys.db.repositories.movies import MoviesRepository
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from recsys.api.dependencies import init_request_context
+from recsys.context import get_request_ctx
 
 
 
@@ -84,24 +86,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Any, None]:
     )
     async with SessionLocal() as session:
         ratings_repo = RatingsRepository(session=session)
-        await app.state.recommender.preload(ratings_repo=ratings_repo)
+        await app.state.recommender.preload()
     yield
     await engine.dispose()
 
 app = FastAPI(
     title="MovieLens Recommender API",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    dependencies=[Depends(init_request_context)]
 )
 
 def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return cast(async_sessionmaker[AsyncSession], app.state.sessionmaker)
 
-async def get_db_session(
-    sessionmaker: async_sessionmaker[AsyncSession] = Depends(get_sessionmaker),
-) -> AsyncGenerator[AsyncSession, None]:
-    async with sessionmaker() as session:
-        yield session
 
 def get_recommender() -> Recommender:
     return cast(Recommender, app.state.recommender)
@@ -113,21 +111,18 @@ def get_recommender() -> Recommender:
 async def get_recommendations(
     id: int = Path(..., ge=1),
     k: int = Query(10, ge=1, le=100),
-    session: AsyncSession = Depends(get_db_session),
     recommender: Recommender = Depends(get_recommender),
+    ctx = Depends(get_request_ctx),
 ):
     try:
-        ratings_repo = RatingsRepository(session=session)
-        movies_repo = MoviesRepository(session=session)
         movies = await recommender.recommend(
+            ctx=ctx,
             user_id=id,
             n_items=k,
-            ratings_repo=ratings_repo,
-            movies_repo=movies_repo,
         )
         return RecsResponse(movies=movies)
     except Exception as e:
-        raise HTTPException(status_code=501, detail=e)
+        raise HTTPException(status_code=501, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
