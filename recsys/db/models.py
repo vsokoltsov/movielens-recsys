@@ -10,12 +10,9 @@ from sqlalchemy import (
     CheckConstraint,
     Index,
 )
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import DeclarativeBase
 
-Base = declarative_base()
-
-
-class User(Base):
+class User(DeclarativeBase):
     __tablename__ = "users"
 
     user_id = Column(Integer, primary_key=True, index=True)
@@ -25,7 +22,7 @@ class User(Base):
     zip = Column(String(16), nullable=True)
 
 
-class Movie(Base):
+class Movie(DeclarativeBase):
     __tablename__ = "movies"
 
     movie_id = Column(Integer, primary_key=True, index=True)
@@ -33,10 +30,9 @@ class Movie(Base):
     genres = Column(Text, nullable=True)
 
 
-class Rating(Base):
+class Rating(DeclarativeBase):
     __tablename__ = "ratings"
 
-    # Если в датасете нет уникального id, логично сделать составной PK:
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
     movie_id = Column(Integer, ForeignKey("movies.movie_id", ondelete="CASCADE"), primary_key=True)
 
