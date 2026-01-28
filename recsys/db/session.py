@@ -1,18 +1,20 @@
+from fastapi import Request
+from typing import cast
+from collections.abc import AsyncGenerator
+from sqlalchemy import exc
 from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
     AsyncSession,
-    create_async_engine,
     async_sessionmaker,
 )
 
-DATABASE_URL = "postgresql+psycopg://recsys:recsys@localhost:5432/recsys"
+async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    sessionmaker = cast(async_sessionmaker[AsyncSession], request.app.state.sessionmaker)
+    async with sessionmaker() as session:
+        try:
+            yield session
+        except exc.SQLAlchemyError:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
-engine: AsyncEngine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-)
-
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    expire_on_commit=False,
-)
