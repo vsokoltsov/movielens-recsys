@@ -8,12 +8,12 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
-import numpy as np
 from scipy.sparse import csr_matrix
 from recsys.db.repositories.ratings import RatingsRepository
 from recsys.gcp import GCPModelStorage
 import anyio
 import tempfile
+
 
 class PairDataset(Dataset):
     def __init__(self, users, items, labels):
@@ -27,8 +27,16 @@ class PairDataset(Dataset):
     def __getitem__(self, idx):
         return self.users[idx], self.items[idx], self.labels[idx]
 
+
 class NeuralMF(nn.Module):
-    def __init__(self, n_users: int, n_items: int, emb_dim: int = 64, hidden_dim: int = 128, dropout: float = 0.1):
+    def __init__(
+        self,
+        n_users: int,
+        n_items: int,
+        emb_dim: int = 64,
+        hidden_dim: int = 128,
+        dropout: float = 0.1,
+    ):
         super().__init__()
         self.user_emb = nn.Embedding(n_users, emb_dim)
         self.item_emb = nn.Embedding(n_items, emb_dim)
@@ -50,7 +58,10 @@ class NeuralMF(nn.Module):
         logit = self.mlp(x).squeeze(1)
         return logit
 
-def build_train_pairs_with_negatives(train_pos: pd.DataFrame, X_ui, n_items: int, n_neg: int = 4, seed: int = 42):
+
+def build_train_pairs_with_negatives(
+    train_pos: pd.DataFrame, X_ui, n_items: int, n_neg: int = 4, seed: int = 42
+):
     """
     train_pos: DataFrame [u_idx, i_idx] positive interactions
     X_ui: csr_matrix (n_users, n_items) positives as 1
@@ -83,12 +94,13 @@ def build_train_pairs_with_negatives(train_pos: pd.DataFrame, X_ui, n_items: int
     items.append(neg_items)
     labels.append(np.zeros(len(neg_users), dtype=np.float32))
 
-    users = np.concatenate(users) # type: ignore
+    users = np.concatenate(users)  # type: ignore
     items = np.concatenate(items)  # type: ignore
     labels = np.concatenate(labels)  # type: ignore
 
     perm = rng.permutation(len(users))
     return users[perm], items[perm], labels[perm]
+
 
 def train_neural_mf(
     model: nn.Module,
@@ -132,6 +144,7 @@ def train_neural_mf(
 
     return model
 
+
 @dataclass
 class PytorchRecommender:
     model_path: str
@@ -155,7 +168,9 @@ class PytorchRecommender:
     device: str = field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu"
     )
-    session: Optional[ort.InferenceSession] = field(default=None, init=False, repr=False)
+    session: Optional[ort.InferenceSession] = field(
+        default=None, init=False, repr=False
+    )
     model: Optional[nn.Module] = field(default=None, init=False, repr=False)
     X_ui: Optional[csr_matrix] = field(default=None, init=False, repr=False)
 
@@ -165,10 +180,10 @@ class PytorchRecommender:
     idx2item: Dict[int, int] = field(default_factory=dict, init=False)
 
     async def preload(self) -> None:
-        local_onnx = await self.storage.load_onnx(
-            self.model_path
+        local_onnx = await self.storage.load_onnx(self.model_path)
+        self.session = ort.InferenceSession(
+            local_onnx, providers=["CPUExecutionProvider"]
         )
-        self.session = ort.InferenceSession(local_onnx, providers=["CPUExecutionProvider"])
 
         self.X_ui = await self.storage.load_csr_npz(self.x_ui_path)
         meta = await self.storage.load_json(self.mappings_path)
@@ -186,7 +201,9 @@ class PytorchRecommender:
         pos = tmp[tmp["interaction"] == 1][["user_id", "movie_id"]].drop_duplicates()
 
         if pos.empty:
-            raise RuntimeError("No positive interactions found (check threshold / data).")
+            raise RuntimeError(
+                "No positive interactions found (check threshold / data)."
+            )
 
         users = np.sort(pos["user_id"].unique())
         items = np.sort(pos["movie_id"].unique())
@@ -239,13 +256,16 @@ class PytorchRecommender:
         assert self.model is not None, "Pytorch model is not defined"
 
         await self.storage.save_csr_npz(self.x_ui_path, self.X_ui)
-        await self.storage.save_json(self.mappings_path, {
-            "user2idx": self.user2idx,
-            "idx2user": self.idx2user,
-            "item2idx": self.item2idx,
-            "idx2item": self.idx2item,
-            "threshold": self.threshold
-        })
+        await self.storage.save_json(
+            self.mappings_path,
+            {
+                "user2idx": self.user2idx,
+                "idx2user": self.idx2user,
+                "item2idx": self.item2idx,
+                "idx2item": self.idx2item,
+                "threshold": self.threshold,
+            },
+        )
 
         self.model.eval()
         u = torch.tensor([0, 1, 2, 3], dtype=torch.long)
@@ -266,7 +286,7 @@ class PytorchRecommender:
             dynamic_axes={
                 "user_id": {0: "batch"},
                 "item_id": {0: "batch"},
-                "logit":   {0: "batch"},
+                "logit": {0: "batch"},
             },
         )
         await self.storage.save_onnx(self.model_path, local_onnx_path)

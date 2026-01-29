@@ -1,9 +1,6 @@
-import os
-from re import L
 import pandas as pd
-from typing import List, Union, Optional
+from typing import List, Optional
 from dataclasses import dataclass, field
-from scipy.sparse import csr_matrix
 
 from recsys.aggregates import Movie, ModelType, Source
 from recsys.modeling.als import AlternatingLeastSquaresRecommender
@@ -13,6 +10,7 @@ from recsys.db.repositories.ratings import RatingsRepository
 from recsys.db.repositories.movies import MoviesRepository
 from recsys.modeling.protocols import RecommenderModel
 from recsys.context import RequestContext
+
 
 @dataclass
 class Recommender:
@@ -27,7 +25,7 @@ class Recommender:
     async def preload(self) -> None:
         if self.storage is None:
             raise ValueError("Storage is none")
-        
+
         if self.model_type == ModelType.ALS:
             self.model = AlternatingLeastSquaresRecommender(
                 storage=self.storage,
@@ -40,24 +38,27 @@ class Recommender:
             self.model = ItemKNNRecommender(
                 storage=self.storage,
                 artifact_prefix="item_knn/v1",
-                k_neighbors=200, 
-                threshold=self.rating_threshold
+                k_neighbors=200,
+                threshold=self.rating_threshold,
             )
         else:
             raise ValueError(f"Unknown model_type: {self.model_type}")
 
         await self.model.preload()
- 
 
-    async def recommend(self, ctx: RequestContext, user_id: int, n_items: int = 10) -> List[Movie]:
+    async def recommend(
+        self, ctx: RequestContext, user_id: int, n_items: int = 10
+    ) -> List[Movie]:
         ratings_repo: RatingsRepository = ctx.ratings
         movies_repo: MoviesRepository = ctx.movies
-    
+
         if self.model is None:
             raise ValueError("model is not initialized")
 
         candidate_ids = await self.model.recommend(user_id=user_id, n_records=n_items)
-        seen = await ratings_repo.fetch_user_seen_movie_ids(user_id=user_id, min_rating=self.rating_threshold)
+        seen = await ratings_repo.fetch_user_seen_movie_ids(
+            user_id=user_id, min_rating=self.rating_threshold
+        )
 
         filtered_ids = [mid for mid in candidate_ids if mid not in seen]
         filtered_ids = filtered_ids[:n_items]
@@ -71,12 +72,6 @@ class Recommender:
         ordered = [by_id[mid] for mid in filtered_ids if mid in by_id]
 
         return [
-            Movie(
-                id=int(rec.movie_id),
-                title=str(rec.title),
-                genre=str(rec.genres)
-            ) for rec in ordered
+            Movie(id=int(rec.movie_id), title=str(rec.title), genre=str(rec.genres))
+            for rec in ordered
         ]
-
-        
-        

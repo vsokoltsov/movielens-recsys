@@ -12,6 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
+
 class User(DeclarativeBase):
     __tablename__ = "users"
 
@@ -33,8 +34,12 @@ class Movie(DeclarativeBase):
 class Rating(DeclarativeBase):
     __tablename__ = "ratings"
 
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
-    movie_id = Column(Integer, ForeignKey("movies.movie_id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(
+        Integer, ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True
+    )
+    movie_id = Column(
+        Integer, ForeignKey("movies.movie_id", ondelete="CASCADE"), primary_key=True
+    )
 
     rating = Column(Integer, nullable=False)
     timestamp = Column(BigInteger, nullable=True)

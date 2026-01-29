@@ -9,12 +9,14 @@ from typing import cast
 from collections.abc import AsyncGenerator
 from sqlalchemy import exc
 from sqlalchemy.ext.asyncio import (
-    AsyncSession,
     async_sessionmaker,
 )
 
+
 async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
-    sessionmaker = cast(async_sessionmaker[AsyncSession], request.app.state.sessionmaker)
+    sessionmaker = cast(
+        async_sessionmaker[AsyncSession], request.app.state.sessionmaker
+    )
     async with sessionmaker() as session:
         try:
             yield session
@@ -23,6 +25,7 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
             raise
         finally:
             await session.close()
+
 
 async def init_request_context(
     session: AsyncSession = Depends(get_db_session),
@@ -36,6 +39,7 @@ async def init_request_context(
 
 def get_recommender(request: Request):
     return request.app.state.recommender
+
 
 def get_sessionmaker(request: Request):
     return request.app.state.sessionmaker

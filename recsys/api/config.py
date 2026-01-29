@@ -1,7 +1,8 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 from recsys.aggregates import ModelType, Source
 from functools import lru_cache
 from typing import Optional
+
 
 class Settings(BaseSettings):
     MODEL_TYPE: ModelType
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
 
     # model_config = SettingsConfigDict(env_file=".env")
 
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings() # type: ignore
+    return Settings()  # type: ignore

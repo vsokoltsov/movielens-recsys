@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recsys.db.models import Movie
 
+
 @dataclass
 class MoviesRepository:
     session: AsyncSession

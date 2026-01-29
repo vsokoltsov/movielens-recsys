@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+
 def build_sessionmaker(
     database_url: str,
     *,

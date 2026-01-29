@@ -1,4 +1,3 @@
-import os
 from typing import List, Dict, Optional
 import pandas as pd
 import numpy as np
@@ -6,12 +5,10 @@ from dataclasses import dataclass, field
 from implicit.als import AlternatingLeastSquares
 from scipy.sparse import csr_matrix
 
-from recsys.aggregates import Movie
-from recsys.config import MOVIELENS_PATH
-from recsys.utils import read_from_csv
 from recsys.db.repositories.ratings import RatingsRepository
 from recsys.gcp import GCPModelStorage
 from recsys.modeling.protocols import RecommenderModel
+
 
 @dataclass
 class AlternatingLeastSquaresRecommender(RecommenderModel):
@@ -51,14 +48,17 @@ class AlternatingLeastSquaresRecommender(RecommenderModel):
 
         await self.storage.save_als_model(self.model_path, self.model)
         await self.storage.save_csr_npz(self.x_ui_path, self.X_ui)
-        await self.storage.save_json(self.mappings_path, {
-            "user2idx": self.user2idx,
-            "idx2user": self.idx2user,
-            "item2idx": self.item2idx,
-            "idx2item": self.idx2item,
-            "threshold": self.threshold,
-            "params": self.best_params,
-        })
+        await self.storage.save_json(
+            self.mappings_path,
+            {
+                "user2idx": self.user2idx,
+                "idx2user": self.idx2user,
+                "item2idx": self.item2idx,
+                "idx2item": self.idx2item,
+                "threshold": self.threshold,
+                "params": self.best_params,
+            },
+        )
 
     async def recommend(self, user_id: int, n_records: int = 10) -> List[int]:
         user_id = int(user_id)

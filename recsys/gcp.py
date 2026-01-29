@@ -6,6 +6,7 @@ from google.cloud import storage
 from scipy.sparse import csr_matrix
 from implicit.als import AlternatingLeastSquares
 
+
 @dataclass
 class GCPStorageClient:
     client: storage.Client = field(default_factory=storage.Client)
@@ -45,7 +46,7 @@ class GCPModelStorage:
     async def save_als_model(self, path: str, model: AlternatingLeastSquares) -> None:
         with tempfile.NamedTemporaryFile(suffix=".npz") as tmp:
             model.save(tmp.name)
-        
+
             blob = self.bucket.blob(path)
             blob.upload_from_filename(tmp.name)
 

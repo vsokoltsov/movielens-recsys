@@ -5,22 +5,25 @@ from typing import Optional
 import click
 from dotenv import load_dotenv
 
-from recsys.config import MOVIELENS_PATH
+from recsys.config import MOVIELENS_PATH, DATABASE_URL
 from recsys.aggregates import ModelType
 from recsys.modeling.als import AlternatingLeastSquaresRecommender
 from recsys.modeling.item_knn import ItemKNNRecommender
 from recsys.modeling.torch import PytorchRecommender
 from recsys.modeling.dataset import Dataset
 from recsys.gcp import GCPModelStorage
-from recsys.db.session import AsyncSessionLocal
+from recsys.db.session import build_sessionmaker, session_scope
 from recsys.db.repositories.ratings import RatingsRepository
+
 
 async def train_model(model_type: str, bucket_name: Optional[str]):
     load_dotenv()
 
-    env_bucket = os.environ.get('MODEL_BUCKET', bucket_name)
+    env_bucket = os.environ.get("MODEL_BUCKET", bucket_name)
     dataset = Dataset(dataset_path=MOVIELENS_PATH)
-    async with AsyncSessionLocal() as session:
+    engine, session_local = build_sessionmaker(database_url=DATABASE_URL)
+
+    async with session_scope(session_local) as session:
         ratings_repo = RatingsRepository(session)
         model_storage = GCPModelStorage(bucket_name=str(env_bucket))
         if model_type == ModelType.ALS:
@@ -41,8 +44,8 @@ async def train_model(model_type: str, bucket_name: Optional[str]):
                 ratings_repo=ratings_repo,
                 storage=model_storage,
                 artifact_prefix="item_knn/v1",
-                k_neighbors=200, 
-                threshold=4
+                k_neighbors=200,
+                threshold=4,
             )
             await knn.fit()
             await knn.save()
@@ -53,10 +56,12 @@ async def train_model(model_type: str, bucket_name: Optional[str]):
                 model_path="pytorch/latest/model.pt",
                 x_ui_path="pytorch/latest/x_ui.npz",
                 mappings_path="pytorch/latest/mappings.json",
-                ratings_repo=ratings_repo
+                ratings_repo=ratings_repo,
             )
             await ptr.fit(dataset.ratings)
             await ptr.save()
+
+        await engine.dispose()
 
 
 @click.command()
@@ -67,10 +72,11 @@ async def train_model(model_type: str, bucket_name: Optional[str]):
 )
 @click.option(
     "--bucket-name",
-    help='Use of Google Cloud Storage',
+    help="Use of Google Cloud Storage",
 )
 def main(model_type: str, bucket_name: str) -> None:
     asyncio.run(train_model(model_type, bucket_name))
+
 
 if __name__ == "__main__":
     main()

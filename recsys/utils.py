@@ -1,6 +1,7 @@
 from typing import List
 import pandas as pd
 
+
 def read_from_csv(path: str, columns: List[str]) -> pd.DataFrame:
     return pd.read_csv(
         path,
@@ -10,6 +11,7 @@ def read_from_csv(path: str, columns: List[str]) -> pd.DataFrame:
         encoding="latin-1",
     )
 
+
 def read_from_bytes(bts: bytes, columns: List[str]) -> pd.DataFrame:
     return pd.read_csv(
         bts,
@@ -18,6 +20,7 @@ def read_from_bytes(bts: bytes, columns: List[str]) -> pd.DataFrame:
         names=columns,
         encoding="latin-1",
     )
+
 
 def temporal_split_per_user(
     ratings: pd.DataFrame,

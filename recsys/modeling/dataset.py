@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from dataclasses import dataclass
 from recsys.utils import read_from_csv
 

@@ -5,7 +5,8 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from recsys.db.models import Base
+from recsys.db.models import DeclarativeBase as Base
+
 
 def _build_db_url() -> str:
     url = os.getenv("DATABASE_URL")
@@ -13,12 +14,13 @@ def _build_db_url() -> str:
         return url
 
     user = os.environ["DB_USER"]
-    pwd  = os.environ["DB_PASSWORD"]
+    pwd = os.environ["DB_PASSWORD"]
     host = os.getenv("DB_HOST", "127.0.0.1")
     port = os.getenv("DB_PORT", "5432")
     name = os.environ["DB_NAME"]
 
     return f"postgresql+psycopg://{user}:{pwd}@{host}:{port}/{name}"
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -40,12 +42,12 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+
 def get_url() -> str:
     url = os.environ["DATABASE_URL"]
     url = url.replace("postgresql+psycopg_async://", "postgresql+psycopg://")
     url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://")
     return url
-
 
 
 def run_migrations_offline() -> None:
@@ -90,9 +92,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

@@ -1,22 +1,21 @@
-import os
 from typing import Optional, Dict, List
 import pandas as pd
 import numpy as np
-import json
 from scipy.sparse import csr_matrix, diags
-from recsys.config import MODELS
 from recsys.gcp import GCPModelStorage
 from recsys.db.repositories.ratings import RatingsRepository
 from recsys.modeling.protocols import RecommenderModel
 
+
 class ItemKNNRecommender(RecommenderModel):
-    def __init__(self,
+    def __init__(
+        self,
         storage: GCPModelStorage,
         artifact_prefix: str,
         ratings_repo: Optional[RatingsRepository] = None,
-        k_neighbors=200, 
-        threshold=4):
-
+        k_neighbors=200,
+        threshold=4,
+    ):
 
         self.storage = storage
         self.ratings_repo = ratings_repo
@@ -45,8 +44,10 @@ class ItemKNNRecommender(RecommenderModel):
     async def fit(self, limit: Optional[int] = None):
         if not self.ratings_repo:
             raise ValueError("ratings repository is not defined")
-            
-        df = await self.ratings_repo.fetch_ratings_df(min_rating=self.threshold, limit=limit)
+
+        df = await self.ratings_repo.fetch_ratings_df(
+            min_rating=self.threshold, limit=limit
+        )
         if df.empty:
             self.user2idx = {}
             self.item2idx = {}
@@ -55,7 +56,7 @@ class ItemKNNRecommender(RecommenderModel):
             self.S_ii = csr_matrix((0, 0), dtype=np.float32)
             await self.save()
             return
-    
+
         # factorize
         u_codes, u_uniques = pd.factorize(df["user_id"], sort=True)
         i_codes, i_uniques = pd.factorize(df["movie_id"], sort=True)
@@ -78,8 +79,12 @@ class ItemKNNRecommender(RecommenderModel):
         if self.X_ui is None or self.S_ii is None:
             raise RuntimeError("Nothing to save: X_ui/S_ii not built.")
 
-        await self.storage.save_csr_npz(f"{self.artifact_prefix}/X_ui.npz", self.X_ui.tocsr())
-        await self.storage.save_csr_npz(f"{self.artifact_prefix}/S_ii.npz", self.S_ii.tocsr())
+        await self.storage.save_csr_npz(
+            f"{self.artifact_prefix}/X_ui.npz", self.X_ui.tocsr()
+        )
+        await self.storage.save_csr_npz(
+            f"{self.artifact_prefix}/S_ii.npz", self.S_ii.tocsr()
+        )
 
         meta = {
             "k_neighbors": int(self.k_neighbors),

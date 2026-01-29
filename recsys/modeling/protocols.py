@@ -1,5 +1,6 @@
 from typing import List, Protocol, runtime_checkable
 
+
 @runtime_checkable
 class RecommenderModel(Protocol):
     async def preload(self) -> None: ...
