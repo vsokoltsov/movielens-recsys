@@ -2,14 +2,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from contextvars import ContextVar
 
-from recsys.db.repositories.ratings import RatingsRepository
-from recsys.db.repositories.movies import MoviesRepository
+from recsys.repository.protocols import RatingsRepositoryProtocol
+from recsys.repository.protocols import MoviesRepositoryProtocol
 
 
 @dataclass
 class RequestContext:
-    ratings: RatingsRepository
-    movies: MoviesRepository
+    ratings: RatingsRepositoryProtocol
+    movies: MoviesRepositoryProtocol
 
 
 request_ctx_var: ContextVar[RequestContext | None] = ContextVar(
