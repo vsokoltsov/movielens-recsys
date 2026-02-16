@@ -9,8 +9,8 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 from scipy.sparse import csr_matrix
-from recsys.db.repositories.ratings import RatingsRepository
-from recsys.gcp import GCPModelStorage
+from recsys.repository.protocols import RatingsRepositoryProtocol
+from recsys.storage import StorageProtocol
 import anyio
 import tempfile
 
@@ -148,8 +148,8 @@ def train_neural_mf(
 @dataclass
 class PytorchRecommender:
     model_path: str
-    ratings_repo: RatingsRepository
-    storage: GCPModelStorage
+    ratings_repo: RatingsRepositoryProtocol
+    storage: StorageProtocol
     x_ui_path: str
     mappings_path: str
 
