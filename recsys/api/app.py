@@ -2,20 +2,24 @@ from __future__ import annotations
 
 import os
 import pandas as pd
-from typing import List, Any, cast, AsyncGenerator
+from typing import List, Any, AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends, HTTPException, Path, Query
+from fastapi import FastAPI, Depends, Path, Query
 from pydantic import BaseModel
 
 from recsys.aggregates import Movie
-from recsys.utils import read_from_bytes
-from recsys.config import MODELS
-from recsys.api.config import get_settings, Source
+from recsys.utils import read_from_bytes, read_from_csv
+from recsys.config import get_settings
+from recsys.aggregates import Source, Setup
 from recsys.recommender import Recommender
-from recsys.gcp import GCPStorageClient, GCPModelStorage
-from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from recsys.storage import (
+    GCPStorageClient,
+    GCPModelStorage,
+    LocalStorage,
+    StorageProtocol,
+)
+from recsys.api.dependencies import get_recommender
 from recsys.api.dependencies import init_request_context
 from recsys.context import get_request_ctx
 from recsys.db.session import build_sessionmaker
@@ -27,55 +31,74 @@ class RecsResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[Any, None]:
-    load_dotenv()
-
     settings = get_settings()
-    engine, session = build_sessionmaker(
-        database_url=settings.DATABASE_URL, expire_on_commit=False, pool_pre_ping=True
-    )
-    app.state.engine = engine
-    app.state.sessionmaker = session
-
-    model_path = os.path.join(MODELS, settings.MODEL_NAME)
-    gcs_client = GCPStorageClient()
-    model_bucket = os.environ.get("MODEL_BUCKET")
-
-    storage = None
-    movies_df = pd.DataFrame()
-    if model_bucket:
-        storage = GCPModelStorage(bucket_name=model_bucket)
-        app.state.storage = storage
-
-    if settings.SOURCE == Source.CSV:
-        raw_bucket = os.environ.get("RAW_BUCKET")
-        if not raw_bucket:
-            raise ValueError("'RAW_BUCKET' variable is not set")
-
-        users_df = read_from_bytes(
-            bts=gcs_client.read_bytes(bucket=raw_bucket, obj="ml-1m/users.dat"),
-            columns=["user_id", "gender", "age", "occupation", "zip"],
+    storage: StorageProtocol
+    if settings.SOURCE == Source.DB:
+        engine, session = build_sessionmaker(
+            database_url=settings.DATABASE_URL,
+            expire_on_commit=False,
+            pool_pre_ping=True,
         )
-        movies_df = read_from_bytes(
-            bts=gcs_client.read_bytes(bucket=raw_bucket, obj="ml-1m/movies.dat"),
-            columns=["movie_id", "title", "genres"],
-        )
-        ratings_df = read_from_bytes(
-            bts=gcs_client.read_bytes(bucket=raw_bucket, obj="ml-1m/ratings.dat"),
-            columns=["user_id", "movie_id", "rating", "timestamp"],
-        )
-        app.state.movies = movies_df
-        app.state.ratings = ratings_df
-        app.state.users = users_df
+        app.state.engine = engine
+        app.state.sessionmaker = session
+
+    if settings.SETUP == Setup.LOCAL:
+        storage = LocalStorage(model_path=settings.MODELS_PATH)
+
+        if settings.SOURCE == Source.CSV:
+            users_df = read_from_csv(
+                path=os.path.join(settings.MOVIELENS_PATH, "users.dat"),
+                columns=["user_id", "gender", "age", "occupation", "zip"],
+            )
+            movies_df = read_from_csv(
+                path=os.path.join(settings.MOVIELENS_PATH, "movies.dat"),
+                columns=["movie_id", "title", "genres"],
+            )
+            ratings_df = read_from_csv(
+                path=os.path.join(settings.MOVIELENS_PATH, "ratings.dat"),
+                columns=["user_id", "movie_id", "rating", "timestamp"],
+            )
+            app.state.movies = movies_df
+            app.state.ratings = ratings_df
+            app.state.users = users_df
+
+    if settings.SETUP == Setup.CLOUD:
+        gcs_client = GCPStorageClient()
+        model_bucket = settings.MODEL_BUCKET
+
+        movies_df = pd.DataFrame()
+        if model_bucket:
+            storage = GCPModelStorage(bucket_name=model_bucket)
+            app.state.storage = storage
+
+        if settings.SOURCE == Source.CSV:
+            raw_bucket = settings.RAW_BUCKET
+            if not raw_bucket:
+                raise ValueError("'RAW_BUCKET' variable is not set")
+
+            users_df = read_from_bytes(
+                bts=gcs_client.read_bytes(bucket=raw_bucket, obj="ml-1m/users.dat"),
+                columns=["user_id", "gender", "age", "occupation", "zip"],
+            )
+            movies_df = read_from_bytes(
+                bts=gcs_client.read_bytes(bucket=raw_bucket, obj="ml-1m/movies.dat"),
+                columns=["movie_id", "title", "genres"],
+            )
+            ratings_df = read_from_bytes(
+                bts=gcs_client.read_bytes(bucket=raw_bucket, obj="ml-1m/ratings.dat"),
+                columns=["user_id", "movie_id", "rating", "timestamp"],
+            )
+            app.state.movies = movies_df
+            app.state.ratings = ratings_df
+            app.state.users = users_df
 
     app.state.recommender = Recommender(
-        storage=storage,
         model_type=settings.MODEL_TYPE,
         source=settings.SOURCE,
-        movies=movies_df,
+        model_path=settings.MODELS_PATH,
         rating_threshold=settings.RATING_THRESHOLD,
-        model_path=model_path,
     )
-    await app.state.recommender.preload()
+    await app.state.recommender.preload(storage=storage)
     yield
     await engine.dispose()
 
@@ -88,14 +111,6 @@ app = FastAPI(
 )
 
 
-def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
-    return cast(async_sessionmaker[AsyncSession], app.state.sessionmaker)
-
-
-def get_recommender() -> Recommender:
-    return cast(Recommender, app.state.recommender)
-
-
 @app.get(
     "/users/{id}/recommendations",
     response_model=RecsResponse,
@@ -106,15 +121,12 @@ async def get_recommendations(
     recommender: Recommender = Depends(get_recommender),
     ctx=Depends(get_request_ctx),
 ):
-    try:
-        movies = await recommender.recommend(
-            ctx=ctx,
-            user_id=id,
-            n_items=k,
-        )
-        return RecsResponse(movies=movies)
-    except Exception as e:
-        raise HTTPException(status_code=501, detail=str(e))
+    movies = await recommender.recommend(
+        ctx=ctx,
+        user_id=id,
+        n_items=k,
+    )
+    return RecsResponse(movies=movies)
 
 
 if __name__ == "__main__":
