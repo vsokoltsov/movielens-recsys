@@ -1,13 +1,13 @@
-import pandas as pd
+import os
 from typing import List, Optional
 from dataclasses import dataclass, field
 
 from recsys.aggregates import Movie, ModelType, Source
 from recsys.modeling.als import AlternatingLeastSquaresRecommender
 from recsys.modeling.item_knn import ItemKNNRecommender
-from recsys.gcp import GCPModelStorage
-from recsys.db.repositories.ratings import RatingsRepository
-from recsys.db.repositories.movies import MoviesRepository
+from recsys.storage import StorageProtocol
+from recsys.repository.protocols import RatingsRepositoryProtocol
+from recsys.repository.protocols import MoviesRepositoryProtocol
 from recsys.modeling.protocols import RecommenderModel
 from recsys.context import RequestContext
 
@@ -18,26 +18,21 @@ class Recommender:
     source: Source
     rating_threshold: int
     model_path: str
-    movies: Optional[pd.DataFrame]
-    storage: Optional[GCPModelStorage] = field(default=None, repr=False)
     model: Optional[RecommenderModel] = field(default=None, init=False, repr=False)
 
-    async def preload(self) -> None:
-        if self.storage is None:
-            raise ValueError("Storage is none")
-
+    async def preload(self, storage: StorageProtocol) -> None:
         if self.model_type == ModelType.ALS:
             self.model = AlternatingLeastSquaresRecommender(
-                storage=self.storage,
+                storage=storage,
                 threshold=self.rating_threshold,
-                model_path="als/latest/model.npz",
-                x_ui_path="als/latest/x_ui.npz",
-                mappings_path="als/latest/mappings.json",
+                model_path=os.path.join(self.model_path, "model.npz"),
+                x_ui_path=os.path.join(self.model_path, "x_ui.npz"),
+                mappings_path=os.path.join(self.model_path, "mappings.json"),
             )
         elif self.model_type == ModelType.ITEM_KNN:
             self.model = ItemKNNRecommender(
-                storage=self.storage,
-                artifact_prefix="item_knn/v1",
+                storage=storage,
+                artifact_prefix=os.path.join(self.model_path, "item_knn"),
                 k_neighbors=200,
                 threshold=self.rating_threshold,
             )
@@ -49,8 +44,8 @@ class Recommender:
     async def recommend(
         self, ctx: RequestContext, user_id: int, n_items: int = 10
     ) -> List[Movie]:
-        ratings_repo: RatingsRepository = ctx.ratings
-        movies_repo: MoviesRepository = ctx.movies
+        ratings_repo: RatingsRepositoryProtocol = ctx.ratings
+        movies_repo: MoviesRepositoryProtocol = ctx.movies
 
         if self.model is None:
             raise ValueError("model is not initialized")
@@ -68,10 +63,10 @@ class Recommender:
 
         movies_orm = await movies_repo.fetch_movies_by_ids(filtered_ids)
 
-        by_id = {int(m.movie_id): m for m in movies_orm}
+        by_id = {int(m.id): m for m in movies_orm}
         ordered = [by_id[mid] for mid in filtered_ids if mid in by_id]
 
         return [
-            Movie(id=int(rec.movie_id), title=str(rec.title), genre=str(rec.genres))
+            Movie(id=int(rec.id), title=str(rec.title), genre=str(rec.genre))
             for rec in ordered
         ]
