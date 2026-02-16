@@ -13,7 +13,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase
 
 
-class User(DeclarativeBase):
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
     __tablename__ = "users"
 
     user_id = Column(Integer, primary_key=True, index=True)
@@ -23,7 +27,7 @@ class User(DeclarativeBase):
     zip = Column(String(16), nullable=True)
 
 
-class Movie(DeclarativeBase):
+class Movie(Base):
     __tablename__ = "movies"
 
     movie_id = Column(Integer, primary_key=True, index=True)
@@ -31,7 +35,7 @@ class Movie(DeclarativeBase):
     genres = Column(Text, nullable=True)
 
 
-class Rating(DeclarativeBase):
+class Rating(Base):
     __tablename__ = "ratings"
 
     user_id = Column(
