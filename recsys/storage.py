@@ -1,3 +1,5 @@
+from typing import Protocol
+from pathlib import Path
 from dataclasses import dataclass, field
 import numpy as np
 import json
@@ -5,6 +7,61 @@ import tempfile
 from google.cloud import storage
 from scipy.sparse import csr_matrix
 from implicit.als import AlternatingLeastSquares
+
+
+class StorageProtocol(Protocol):
+    async def save_als_model(
+        self, path: str, model: AlternatingLeastSquares
+    ) -> None: ...
+    async def load_als_model(self, path: str) -> AlternatingLeastSquares: ...
+    async def save_csr_npz(self, path: str, matrix: csr_matrix) -> None: ...
+    async def load_csr_npz(self, path: str) -> csr_matrix: ...
+    async def save_json(self, path: str, data: dict) -> None: ...
+    async def load_json(self, path: str) -> dict: ...
+    async def save_onnx(self, path: str, local_onnx_path: str) -> None: ...
+    async def load_onnx(self, path: str) -> str: ...
+
+
+@dataclass
+class LocalStorage(StorageProtocol):
+    model_path: str
+
+    async def save_als_model(self, path: str, model: AlternatingLeastSquares) -> None:
+        model.save(Path(path))
+
+    async def load_als_model(self, path: str) -> AlternatingLeastSquares:
+        model = AlternatingLeastSquares()
+        return model.load(Path(path))
+
+    async def save_csr_npz(self, path: str, matrix: csr_matrix) -> None:
+        np.savez_compressed(
+            Path(path),
+            data=matrix.data,
+            indices=matrix.indices,
+            indptr=matrix.indptr,
+            shape=matrix.shape,
+        )
+
+    async def load_csr_npz(self, path: str) -> csr_matrix:
+        loader = np.load(Path(path), allow_pickle=False)
+        return csr_matrix(
+            (loader["data"], loader["indices"], loader["indptr"]),
+            shape=tuple(loader["shape"]),
+        )
+
+    async def save_json(self, path: str, data: dict) -> None:
+        with open(path, "w") as f:
+            json.dump(data, f, ensure_ascii=False)
+
+    async def load_json(self, path: str) -> dict:
+        with open(path, "r") as f:
+            return json.load(f)
+
+    async def save_onnx(self, path: str, local_onnx_path: str) -> None:
+        pass
+
+    async def load_onnx(self, path: str) -> str:
+        return path
 
 
 @dataclass
@@ -34,7 +91,7 @@ class GCPStorageClient:
 
 
 @dataclass
-class GCPModelStorage:
+class GCPModelStorage(StorageProtocol):
     bucket_name: str
     client: storage.Client = field(init=False, repr=False)
     bucket: storage.Bucket = field(init=False, repr=False)
