@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from implicit.als import AlternatingLeastSquares
 from scipy.sparse import csr_matrix
 
-from recsys.db.repositories.ratings import RatingsRepository
-from recsys.gcp import GCPModelStorage
+from recsys.repository.protocols import RatingsRepositoryProtocol
+from recsys.storage import StorageProtocol
 from recsys.modeling.protocols import RecommenderModel
 
 
@@ -16,8 +16,8 @@ class AlternatingLeastSquaresRecommender(RecommenderModel):
     model_path: str
     x_ui_path: str
     mappings_path: str
-    storage: GCPModelStorage
-    ratings_repo: Optional[RatingsRepository] = None
+    storage: StorageProtocol
+    ratings_repo: Optional[RatingsRepositoryProtocol] = None
     model: AlternatingLeastSquares = field(default_factory=AlternatingLeastSquares)
     X_ui: csr_matrix = field(default_factory=dict, repr=False)
     user2idx: Dict[int, int] = field(default_factory=dict, repr=False)
@@ -80,31 +80,6 @@ class AlternatingLeastSquaresRecommender(RecommenderModel):
         )
 
         return item_idxs
-        # recs = []
-        # n_items = self.X_ui.shape[1]
-        # seen_movie_ids = await self.ratings_repo.fetch_user_seen_movie_ids(
-        #     user_id=user_id,
-        #     min_rating=self.threshold
-        # )
-        # seen_iidx = {self.item2idx[m] for m in seen_movie_ids if m in self.item2idx}
-
-        # for ii in item_idxs:
-        #     ii = int(ii)
-
-        #     if ii < 0 or ii >= n_items:
-        #         raise RuntimeError(
-        #             f"ALS returned out-of-range item index {ii}, but n_items={n_items}. "
-        #             "This means the model and X_ui are from different runs."
-        #         )
-
-        #     if ii in seen_iidx:
-        #         continue
-
-        #     recs.append(self.idx2item[ii])
-        #     if len(recs) == n_records:
-        #         break
-
-        # return recs
 
     def _set_matrix(self, df: pd.DataFrame) -> None:
         u_uniques = np.sort(df["user_id"].unique())
