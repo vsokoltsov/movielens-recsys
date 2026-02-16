@@ -17,3 +17,8 @@ class Movie(BaseModel):
     id: int
     title: str
     genre: str
+
+
+class Setup(Enum):
+    LOCAL = "local"
+    CLOUD = "cloud"
