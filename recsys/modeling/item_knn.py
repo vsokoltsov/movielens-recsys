@@ -2,17 +2,17 @@ from typing import Optional, Dict, List
 import pandas as pd
 import numpy as np
 from scipy.sparse import csr_matrix, diags
-from recsys.gcp import GCPModelStorage
-from recsys.db.repositories.ratings import RatingsRepository
+from recsys.storage import StorageProtocol
+from recsys.repository.protocols import RatingsRepositoryProtocol
 from recsys.modeling.protocols import RecommenderModel
 
 
 class ItemKNNRecommender(RecommenderModel):
     def __init__(
         self,
-        storage: GCPModelStorage,
+        storage: StorageProtocol,
         artifact_prefix: str,
-        ratings_repo: Optional[RatingsRepository] = None,
+        ratings_repo: Optional[RatingsRepositoryProtocol] = None,
         k_neighbors=200,
         threshold=4,
     ):
