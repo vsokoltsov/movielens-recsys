@@ -1,8 +1,30 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: recsys-migrate
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-service-account.json
+    depends_on:
+      - postgres
+    volumes:
+      - ./gcp-service-account.json:/secrets/gcp-service-account.json:ro
+      - ./recsys:/app/recsys
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - ./data:/app/data
+    command: ["uv", "run", "python", "-m", "alembic", "upgrade", "head"]
+    restart: unless-stopped
+
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      target: api
     container_name: recsys-api
     ports:
       - "8000:8000"
@@ -10,6 +32,8 @@ services:
       - .env
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-service-account.json
+    depends_on:
+      - migrate
     volumes:
       - ./gcp-service-account.json:/secrets/gcp-service-account.json:ro
       - ./recsys:/app/recsys
