@@ -23,6 +23,8 @@ class MoviesDBRepository(MoviesRepositoryProtocol):
         res = await self.session.execute(stmt)
         orm_movies = list(res.scalars().all())
         return [
-            MovieAggregate(id=int(m.movie_id), title=str(m.title), genre=str(m.genres) or "")
+            MovieAggregate(
+                id=int(m.movie_id), title=str(m.title), genre=str(m.genres) or ""
+            )
             for m in orm_movies
         ]
