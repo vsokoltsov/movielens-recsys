@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from recsys.db.models import DeclarativeBase as Base
+from recsys.db.models import Base
 
 
 def _build_db_url() -> str:

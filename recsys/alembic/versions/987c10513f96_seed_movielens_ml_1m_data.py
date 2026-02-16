@@ -10,7 +10,7 @@ from typing import Sequence, Union
 
 import os
 from alembic import op
-from recsys.config import RAW_BUCKET
+from recsys.config import get_settings
 from recsys.gcp import GCPStorageClient
 from recsys.utils import read_from_csv
 
@@ -25,19 +25,20 @@ def upgrade() -> None:
     """Upgrade schema."""
     conn = op.get_bind()
     client = GCPStorageClient()
-    if RAW_BUCKET is not None:
+    settings = get_settings()
+    if settings.RAW_BUCKET is not None:
         client.download(
-            bucket_name=RAW_BUCKET,
+            bucket_name=settings.RAW_BUCKET,
             object_name="ml-1m/users.dat",
             dst_path=os.path.join("/tmp", "users.dat"),
         )
         client.download(
-            bucket_name=RAW_BUCKET,
+            bucket_name=settings.RAW_BUCKET,
             object_name="ml-1m/movies.dat",
             dst_path=os.path.join("/tmp", "movies.dat"),
         )
         client.download(
-            bucket_name=RAW_BUCKET,
+            bucket_name=settings.RAW_BUCKET,
             object_name="ml-1m/ratings.dat",
             dst_path=os.path.join("/tmp", "ratings.dat"),
         )
